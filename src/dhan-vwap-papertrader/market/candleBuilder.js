@@ -22,3 +22,4 @@ export function updateCandle(tick) {
     current.volume = tick.volume;
   }
 }
+ 

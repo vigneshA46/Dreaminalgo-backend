@@ -103,3 +103,4 @@ export const getCurrentAdminService = async (adminId) => {
 
   return rows[0];
 };
+ 

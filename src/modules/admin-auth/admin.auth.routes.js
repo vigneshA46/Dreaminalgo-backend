@@ -16,3 +16,4 @@ router.post('/logout', adminLogout);
 router.post('/me',authenticate , authorize('Super Admin'),getCurrentAdmin);
 
 export default router;
+ 
