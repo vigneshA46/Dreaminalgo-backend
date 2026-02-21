@@ -1,4 +1,4 @@
-    import pool from "../../config/db.js";
+import pool from "../../config/db.js";
 import { hashPassword, comparePassword } from "../../utils/password.js";
 import { signAccessToken, signRefreshToken } from "../../utils/jwt.js";
 import { generateToken, hashToken } from "../../utils/crypto.js";

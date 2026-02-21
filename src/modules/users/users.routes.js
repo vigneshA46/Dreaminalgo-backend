@@ -12,9 +12,7 @@ res.json(user);
 });
 
 router.post('/user', authenticate, async (req, res) => {
-const user = await userService.g
-
-etMe(req.body.id);
+const user = await userService.getMe(req.body.id);
 res.json(user);
 });
 
@@ -37,7 +35,7 @@ async (req, res) => {
 router.get(
 '/:id',
 authenticate,
-authorize('Super Admin', 'courseadmin'),
+authorize('superadmin', 'courseadmin'),
 async (req, res) => {
   const user = await userService.getUserById(req.params.id);
   res.json(user);
@@ -65,3 +63,4 @@ async (req, res) => {
 );
 
 export default router;
+ 
