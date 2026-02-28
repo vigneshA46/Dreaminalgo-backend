@@ -7,13 +7,13 @@ export const refreshToken = async (req, res) => {
     await refreshTokenService(oldRefreshToken);
   res.cookie("refreshToken", refreshToken, {
     httpOnly: true,
-    secure: true,
+    secure: false,
     sameSite: "lax",
   });
 
   res.cookie("accessToken",accessToken,{
      httpOnly: true,
-    secure: true,
+    secure: false,
     sameSite: "lax",
   })
 

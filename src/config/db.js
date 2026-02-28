@@ -104,7 +104,7 @@ export const initDB = async () => {
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
   UNIQUE(user_id, broker_name, client_id)
-);
+  );
   `)
 
       await pool.query(
@@ -128,7 +128,7 @@ export const initDB = async () => {
 
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+  );
         `
       )
 
@@ -144,7 +144,7 @@ export const initDB = async () => {
 
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   expires_at TIMESTAMP
-);  
+  );  
         `)
 
 
@@ -165,7 +165,7 @@ export const initDB = async () => {
 
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);`)
+  );`)
 
 
         await pool.query(`CREATE TABLE IF NOT EXISTS deployment_runtime (
@@ -178,7 +178,7 @@ export const initDB = async () => {
 
   last_heartbeat TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);`)
+  );`)
 
 
     console.log("✅ Database connected & tables verified");

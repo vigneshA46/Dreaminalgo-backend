@@ -44,14 +44,14 @@ export const adminLoginService = async (email, password, res) => {
   /* COOKIES */
   res.cookie('accessToken', accessToken, {
     httpOnly: true,
-    secure: true,
-    sameSite: 'strict',
+    secure: false,
+    sameSite: 'lax',
   });
 
   res.cookie('refreshToken', refreshToken, {
     httpOnly: true,
-    secure: true,
-    sameSite: 'strict',
+    secure: false,
+    sameSite: 'lax',
   });
 
   return {

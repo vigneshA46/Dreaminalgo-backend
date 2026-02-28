@@ -11,14 +11,14 @@ export const login = async (req, res) => {
 
   res.cookie("refreshToken", refreshToken, {
     httpOnly: true,
-    secure: true,
-    sameSite: "strict",
+    secure: false,
+    sameSite: "lax",
   });
 
     res.cookie("accessToken", accessToken, {
     httpOnly: true,
-    secure: true,
-    sameSite: "strict",
+    secure: false,
+    sameSite: "lax",
   });
 
   res.json({ userid });
