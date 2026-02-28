@@ -16,13 +16,15 @@ export const logout = async (req, res) => {
 
   res.clearCookie("refreshToken", {
     httpOnly: true,
-    secure: false,
-    sameSite: "lax",
+    secure: true,          // MUST be true (HTTPS)
+    sameSite: "none",      // MUST be none for cross-site
+    path: "/"
   });
   res.clearCookie("accessToken", {
     httpOnly: true,
-    secure: false,
-    sameSite: "lax",
+    secure: true,          // MUST be true (HTTPS)
+    sameSite: "none",      // MUST be none for cross-site
+    path: "/"
   });
 
 

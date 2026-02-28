@@ -44,14 +44,16 @@ export const adminLoginService = async (email, password, res) => {
   /* COOKIES */
   res.cookie('accessToken', accessToken, {
     httpOnly: true,
-    secure: false,
-    sameSite: 'lax',
+    secure: true,          // MUST be true (HTTPS)
+    sameSite: "none",      // MUST be none for cross-site
+    path: "/"
   });
 
   res.cookie('refreshToken', refreshToken, {
     httpOnly: true,
-    secure: false,
-    sameSite: 'lax',
+    secure: true,          // MUST be true (HTTPS)
+    sameSite: "none",      // MUST be none for cross-site
+    path: "/"
   });
 
   return {
