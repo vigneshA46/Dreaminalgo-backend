@@ -22,9 +22,20 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 /* CORS */
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://dreaminalgo.pages.dev"
+];
+
 app.use(
   cors({
-    origin: ["http://localhost:5173","https://dreaminalgo.pages.dev/"],
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     credentials: true,
   })
 );
