@@ -1,45 +1,55 @@
 import pool from "../../config/db.js";
+import { validateBrokerConnection } from "../../services/brokerValidation/brokerValidator.js";
 
 /*
   CONNECT BROKER
 */
 export const connectBroker = async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const { brokerName, clientId, credentials } = req.body;
 
-    if (!brokerName || !clientId || !credentials) {
+  try {
+
+    const userId = req.user.id;
+    const { brokerName, credentials } = req.body;
+
+    if (!brokerName || !credentials) {
       return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    // Validate broker connection
+    const validation = await validateBrokerConnection(
+      brokerName,
+      credentials
+    );
+
+    if (!validation.success) {
+      return res.status(400).json({
+        error: validation.message
+      });
     }
 
     const result = await pool.query(
       `
       INSERT INTO broker_accounts
-      (user_id, broker_name, client_id, credentials)
-      VALUES ($1, $2, $3, $4)
+      (user_id, broker_name, client_id, credentials, status)
+      VALUES ($1,$2,$3,$4,'connected')
       RETURNING *
       `,
       [userId, brokerName, clientId, credentials]
     );
 
     res.status(201).json({
-      message: "Broker connected successfully",
-      broker: result.rows[0],
+      message: `${brokerName} connected successfully`,
+      broker: result.rows[0]
     });
 
   } catch (error) {
+
     console.error("Connect Broker Error:", error);
-
-    if (error.code === "23505") {
-      return res.status(400).json({
-        error: "Broker already connected",
-      });
-    }
-
     res.status(500).json({ error: "Server error" });
-  }
-};
 
+  }
+
+};
 /*
   GET ALL USER BROKERS
 */

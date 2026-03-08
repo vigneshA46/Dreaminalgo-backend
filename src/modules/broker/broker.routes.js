@@ -46,7 +46,7 @@ router.delete(
   ADMIN: UPDATE BROKER STATUS
 */
 router.patch(
-  "/:id/status",
+"/:id/status",
   authenticate,
   authorize("superadmin", "admin"),
   brokerController.updateBrokerStatus
