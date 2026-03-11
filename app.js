@@ -10,6 +10,7 @@ import adminRoutes from './src/modules/admin/admin.routes.js';
 import userRoutes from './src/modules/users/users.routes.js';
 import brokerRoutes from './src/modules/broker/broker.routes.js';
 import stratergyRoutes from './src/modules/strategy/strategy.routes.js'
+import loggerRoutes from "./src/modules/logger/logger.routes.js";
  
 const app = express();
 
@@ -53,6 +54,7 @@ app.use('/api/admin',adminRoutes);
 app.use('/api/users',userRoutes);
 app.use('/api/broker',brokerRoutes);
 app.use('/api/stratergy',stratergyRoutes);
+app.use('/api/paperlogger',loggerRoutes);
 
 /* Health Check */
 app.get('/health', (req, res) => {
