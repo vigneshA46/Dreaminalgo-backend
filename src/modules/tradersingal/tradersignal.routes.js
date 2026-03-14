@@ -7,7 +7,8 @@ import {
   getAllSignals,
   getSignalsByDate,
   getSignalsByUserId,
-  getSignalById
+  getSignalById,
+  getSignalsBystatus
 } from "./tradersignal.controller.js";
 
 const router = Router();
@@ -26,5 +27,7 @@ router.get("/user/:user_id" , authenticate, getSignalsByUserId);
 
 /* GET SINGLE SIGNAL */
 router.get("/:id",authenticate, getSignalById);
+
+router.get("/:status",authenticate, getSignalsBystatus);
 
 export default router;

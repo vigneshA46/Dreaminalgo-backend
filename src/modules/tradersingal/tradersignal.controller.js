@@ -133,6 +133,39 @@ export const getSignalsByUserId = async (req, res) => {
 
 };
 
+/* GET SIGNALS BY STATUS */
+export const getSignalsBystatus = async (req, res) => {
+
+  try {
+
+    const { status } = req.params;
+
+    const result = await pool.query(
+      `SELECT * FROM trader_signal
+       WHERE status = published
+       ORDER BY created_at DESC`,
+      [status]
+    );
+
+    res.json({
+      success: true,
+      data: result.rows
+    });
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch published signals"
+    });
+
+  }
+
+};
+
+
 
 /* GET SINGLE SIGNAL */
 export const getSignalById = async (req, res) => {
