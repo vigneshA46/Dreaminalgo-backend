@@ -25,9 +25,9 @@ router.get("/date/:date" , authenticate, getSignalsByDate);
 /* GET SIGNALS BY USER */
 router.get("/user/:user_id" , authenticate, getSignalsByUserId);
 
+router.get("/status/:status",authenticate, getSignalsBystatus);
 /* GET SINGLE SIGNAL */
 router.get("/:id",authenticate, getSignalById);
 
-router.get("/:status",authenticate, getSignalsBystatus);
 
 export default router;

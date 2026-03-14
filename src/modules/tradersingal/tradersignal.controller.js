@@ -142,9 +142,9 @@ export const getSignalsBystatus = async (req, res) => {
 
     const result = await pool.query(
       `SELECT * FROM trader_signal
-       WHERE status = published
+       WHERE status = $1
        ORDER BY created_at DESC`,
-      [status]
+       [status]
     );
 
     res.json({
