@@ -244,13 +244,15 @@ CREATE TABLE IF NOT EXISTS trader_signal (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL,
     creator_name TEXT NOT NULL,
-    index_symbol TEXT NOT NULL,
-    token TEXT,
+    index_id TEXT NOT NULL,
     config_json JSONB NOT NULL,
     status TEXT DEFAULT 'inactive',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 `);
+
+
+
 await pool.query(`
   CREATE TABLE IF NOT EXISTS instruments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

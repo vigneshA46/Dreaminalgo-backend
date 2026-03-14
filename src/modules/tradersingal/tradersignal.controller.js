@@ -3,22 +3,21 @@ import pool from "../../config/db.js";
 /* CREATE TRADER SIGNAL */
 export const createTraderSignal = async (req, res) => {
   try {
+    const user_id = req.user.id
 
     const {
-      user_id,
       creator_name,
-      index_symbol,
-      token,
+      index_id,
       config_json,
       status
     } = req.body;
 
     const result = await pool.query(
       `INSERT INTO trader_signal 
-      (user_id, creator_name, index_symbol, token, config_json, status)
-      VALUES ($1,$2,$3,$4,$5,$6)
+      (user_id, creator_name, index_id, config_json, status)
+      VALUES ($1,$2,$3,$4,$5)
       RETURNING *`,
-      [user_id, creator_name, index_symbol, token, config_json, status]
+      [user_id, creator_name, index_id, config_json, status]
     );
 
     res.status(201).json({
