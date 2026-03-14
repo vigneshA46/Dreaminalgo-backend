@@ -8,6 +8,7 @@ export const createStrategy = async (req, res) => {
 
     const {
       index_id,
+      description,
       entry_settings,
       config_json,
       status,
@@ -16,10 +17,10 @@ export const createStrategy = async (req, res) => {
 
     const result = await pool.query(
       `INSERT INTO create_strategy
-      (user_id, entry_settings, config_json, status, created_by , index_id)
-      VALUES ($1,$2,$3,$4,$5,$6)
+      (user_id, entry_settings, config_json, status, created_by , index_id,description)
+      VALUES ($1,$2,$3,$4,$5,$6,$7)
       RETURNING *`,
-      [user_id, entry_settings, config_json, status, created_by,index_id]
+      [user_id, entry_settings, config_json, status, created_by,index_id,description]
     );
 
     res.status(201).json({

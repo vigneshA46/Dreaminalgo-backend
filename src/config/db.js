@@ -272,6 +272,7 @@ await pool.query(`
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID,
     index_id VARCHAR(30),
+    description VARCHAR(300),
     entry_settings JSONB,
     config_json JSONB,
     status VARCHAR(20),
