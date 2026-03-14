@@ -267,6 +267,19 @@ await pool.query(`
   );
 `); 
 
+await pool.query(`
+  CREATE TABLE IF NOT EXISTS create_strategy (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID,
+    index_id VARCHAR(30),
+    entry_settings JSONB,
+    config_json JSONB,
+    status VARCHAR(20),
+    created_by VARCHAR(20),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+
 
     console.log("✅ Database connected & tables verified");
   } catch (error) {
