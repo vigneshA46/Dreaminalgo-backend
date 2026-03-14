@@ -11,6 +11,9 @@ import userRoutes from './src/modules/users/users.routes.js';
 import brokerRoutes from './src/modules/broker/broker.routes.js';
 import stratergyRoutes from './src/modules/strategy/strategy.routes.js'
 import loggerRoutes from "./src/modules/logger/logger.routes.js";
+import traderSignalRoutes from "./src/modules/tradersingal/tradersignal.routes.js";
+import instrumentRoutes from "./src/modules/instruments/instruments.routes.js";
+
  
 const app = express();
 
@@ -41,6 +44,7 @@ app.use(
   })
 );
 
+
 /* Parsers */
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
@@ -55,6 +59,8 @@ app.use('/api/users',userRoutes);
 app.use('/api/broker',brokerRoutes);
 app.use('/api/stratergy',stratergyRoutes);
 app.use('/api/paperlogger',loggerRoutes);
+app.use('/api/trader-signal', traderSignalRoutes);
+app.use("/api/instruments", instrumentRoutes);
 
 /* Health Check */
 app.get('/health', (req, res) => {

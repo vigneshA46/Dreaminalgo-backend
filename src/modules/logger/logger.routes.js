@@ -12,9 +12,9 @@ Inserts a paper trade
 -----------------------------------------
 */
 
-router.post("/papertradelogger",authenticate, async (req, res) => {
+router.post("/papertradelogger", async (req, res) => {
   try {
-
+    
     const {
       run_id,
       strategy_id,
@@ -106,7 +106,7 @@ Logs engine activity
 -----------------------------------------
 */
 
-router.post("/paperlogger",authenticate, async (req, res) => {
+router.post("/paperlogger", async (req, res) => {
   try {
 
     const {

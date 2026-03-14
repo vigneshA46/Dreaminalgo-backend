@@ -239,6 +239,32 @@ export const initDB = async () => {
   );
 `);
 
+        await pool.query(`
+CREATE TABLE IF NOT EXISTS trader_signal (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL,
+    creator_name TEXT NOT NULL,
+    index_symbol TEXT NOT NULL,
+    token TEXT,
+    config_json JSONB NOT NULL,
+    status TEXT DEFAULT 'inactive',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+`);
+await pool.query(`
+  CREATE TABLE IF NOT EXISTS instruments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    index_name VARCHAR(100) NOT NULL,
+    segment VARCHAR(10) NOT NULL,
+    dhan VARCHAR(50),
+    smartapi VARCHAR(50),
+    kite VARCHAR(50),
+    aliceblue VARCHAR(50),
+    zebu VARCHAR(50),
+    flattrade VARCHAR(50)
+  );
+`); 
+
 
     console.log("✅ Database connected & tables verified");
   } catch (error) {
