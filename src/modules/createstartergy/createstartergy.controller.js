@@ -117,8 +117,7 @@ export const getUserStrategy = async (req,res)=>{
 export const getStrategyByUserId = async (req,res)=>{
   try{
 
-    const { user_id } = req.params;
-
+    const user_id = req.user.id;
     const result = await pool.query(`
       SELECT * FROM create_strategy
       WHERE user_id = $1

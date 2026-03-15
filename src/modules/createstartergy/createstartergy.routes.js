@@ -23,14 +23,14 @@ router.get("/",authenticate,authorize, getAllStrategy);
 /* GET ADMIN */
 router.get("/admin",authenticate,authorize, getAdminStrategy);
 
+router.get("/:id",authenticate, getSingleStrategy);
 /* GET USER */
 router.get("/user",authenticate, getUserStrategy);
 
 /* GET BY USER ID */
-router.get("/user/:user_id",authenticate, getStrategyByUserId);
+router.post("/user/userid",authenticate, getStrategyByUserId);
 
 /* GET SINGLE */
-router.get("/:id",authenticate, getSingleStrategy);
 
 /* DELETE */
 router.delete("/:id",authenticate, deleteStrategy);
