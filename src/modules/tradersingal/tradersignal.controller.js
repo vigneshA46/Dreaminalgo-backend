@@ -19,7 +19,7 @@ export const createTraderSignal = async (req, res) => {
       (user_id, creator_name, index_id, config_json, status,description,index_name)
       VALUES ($1,$2,$3,$4,$5,$6,$7)
       RETURNING *`,
-      [user_id, creator_name, index_id, config_json, status,description , index_name]
+      [user_id, creator_name, index_id, config_json, status,description,index_name]
     );
 
     res.status(201).json({
@@ -107,7 +107,7 @@ export const getSignalsByUserId = async (req, res) => {
 
   try {
 
-    const { user_id } = req.params;
+    const user_id = req.user.id;
 
     const result = await pool.query(
       `SELECT * FROM trader_signal

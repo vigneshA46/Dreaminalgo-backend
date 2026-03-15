@@ -23,7 +23,7 @@ router.get("/",authenticate, getAllSignals);
 router.get("/date/:date" , authenticate, getSignalsByDate);
 
 /* GET SIGNALS BY USER */
-router.get("/user/:user_id" , authenticate, getSignalsByUserId);
+router.get("/user" , authenticate, getSignalsByUserId);
 
 router.get("/status/:status",authenticate, getSignalsBystatus);
 /* GET SINGLE SIGNAL */

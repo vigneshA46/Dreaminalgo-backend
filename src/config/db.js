@@ -245,6 +245,7 @@ CREATE TABLE IF NOT EXISTS trader_signal (
     user_id UUID NOT NULL,
     creator_name TEXT NOT NULL,
     index_id TEXT NOT NULL,
+    description TEXT,
     index_name TEXT NOT NULL,
     config_json JSONB NOT NULL,
     status TEXT DEFAULT 'inactive',
