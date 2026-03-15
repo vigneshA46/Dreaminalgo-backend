@@ -8,6 +8,7 @@ export const createTraderSignal = async (req, res) => {
     const {
       creator_name,
       index_id,
+      index_name,
       description,
       config_json,
       status
@@ -15,10 +16,10 @@ export const createTraderSignal = async (req, res) => {
 
     const result = await pool.query(
       `INSERT INTO trader_signal 
-      (user_id, creator_name, index_id, config_json, status,description)
-      VALUES ($1,$2,$3,$4,$5,$6)
+      (user_id, creator_name, index_id, config_json, status,description,index_name)
+      VALUES ($1,$2,$3,$4,$5,$6,$7)
       RETURNING *`,
-      [user_id, creator_name, index_id, config_json, status,description]
+      [user_id, creator_name, index_id, config_json, status,description , index_name]
     );
 
     res.status(201).json({

@@ -245,6 +245,7 @@ CREATE TABLE IF NOT EXISTS trader_signal (
     user_id UUID NOT NULL,
     creator_name TEXT NOT NULL,
     index_id TEXT NOT NULL,
+    index_name TEXT NOT NULL,
     config_json JSONB NOT NULL,
     status TEXT DEFAULT 'inactive',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -272,7 +273,7 @@ await pool.query(`
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID,
     index_id VARCHAR(30),
-    description VARCHAR(300),
+    description TEXT,
     entry_settings JSONB,
     config_json JSONB,
     status VARCHAR(20),
@@ -280,7 +281,6 @@ await pool.query(`
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   );
 `);
-
 
     console.log("✅ Database connected & tables verified");
   } catch (error) {
