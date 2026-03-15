@@ -9,6 +9,7 @@ export const createStrategy = async (req, res) => {
     const {
       index_id,
       description,
+      startergy_name,
       entry_settings,
       config_json,
       status,
@@ -17,10 +18,10 @@ export const createStrategy = async (req, res) => {
 
     const result = await pool.query(
       `INSERT INTO create_strategy
-      (user_id, entry_settings, config_json, status, created_by , index_id,description)
-      VALUES ($1,$2,$3,$4,$5,$6,$7)
+      (user_id, entry_settings, config_json, status, created_by , index_id,description,startergy_name)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
       RETURNING *`,
-      [user_id, entry_settings, config_json, status, created_by,index_id,description]
+      [user_id, entry_settings, config_json, status, created_by,index_id,description , startergy_name]
     );
 
     res.status(201).json({
@@ -127,9 +128,7 @@ export const getStrategyByUserId = async (req,res)=>{
     res.json(result.rows);
 
   }catch(error){
-
     console.error(error);
-
     res.status(500).json({
       message:"Failed to fetch user strategies"
     });
