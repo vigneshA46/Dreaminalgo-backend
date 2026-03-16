@@ -3,7 +3,7 @@ import {
   createLeg,
   getLegsByDate,
   getLatestLegs
-} from "../controllers/tradeleg.controller.js";
+} from "./tradeleg.controller.js";
 
 const router = express.Router();
 
