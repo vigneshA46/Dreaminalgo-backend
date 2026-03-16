@@ -14,11 +14,6 @@ export const initSocket = (server) => {
   io.on("connection", (socket) => {
     console.log("🟢 Client connected:", socket.id);
 
-    socket.on("join_strategy", (run_id) => {
-      socket.join(run_id);
-      console.log(`Client joined run ${run_id}`);
-    });
-
     socket.on("disconnect", () => {
       console.log("🔴 Client disconnected:", socket.id);
     });
