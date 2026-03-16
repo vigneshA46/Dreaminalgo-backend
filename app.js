@@ -68,7 +68,7 @@ app.use('/api/paperlogger',loggerRoutes);
 app.use('/api/trader-signal', traderSignalRoutes);
 app.use('/api/instruments', instrumentRoutes);
 app.use('/api/createstartergy',createStrategyRoutes);
-app.use('/api/tradesignal',tradeLegRoutes);
+app.use('/api/tradelegs',tradeLegRoutes);
 app.use("/api/", telemetryRoute);
 
 /* Health Check */
