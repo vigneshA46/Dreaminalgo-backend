@@ -8,7 +8,7 @@ export const createLeg = async (req, res) => {
 
     const result = await pool.query(
       `
-      INSERT INTO trade_legs (strategy_id, leg, symbol, strike_price, date)
+      INSERT INTO trade_legs (startergy_id, leg, symbol, strike_price, date)
       VALUES ($1, $2, $3, $4, $5)
       RETURNING *
       `,
@@ -43,7 +43,7 @@ export const getLegsByDate = async (req, res) => {
       `
       SELECT *
       FROM trade_legs
-      WHERE strategy_id = $1
+      WHERE startergy_id = $1
       AND date = $2
       ORDER BY date DESC
       `,
@@ -78,7 +78,7 @@ export const getLatestLegs = async (req, res) => {
       `
       SELECT *
       FROM trade_legs
-      WHERE strategy_id = $1
+      WHERE startergy_id = $1
       ORDER BY date DESC
       LIMIT 10
       `,
