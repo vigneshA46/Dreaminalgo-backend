@@ -37,5 +37,5 @@ router.delete("/:id",authenticate, deleteStrategy);
 
 router.get("/status/:status",authenticate, getStrategyByStatus);
 
-
+  
 export default router;

@@ -15,8 +15,16 @@ import traderSignalRoutes from "./src/modules/tradersingal/tradersignal.routes.j
 import instrumentRoutes from "./src/modules/instruments/instruments.routes.js";
 import createStrategyRoutes from "./src/modules/createstartergy/createstartergy.routes.js";
 
- 
+import telemetryRoute from "./src/modules/websocket/telemetry.route.js";
+
+import http from 'http'
+import { initSocket } from './src/modules/websocket/socketServer.js';
+
 const app = express();
+const server = http.createServer(app);
+
+initSocket(server);
+
 
 /* Security */
 app.use(helmet());
@@ -29,6 +37,7 @@ if (process.env.NODE_ENV === 'development') {
 /* CORS */
 const allowedOrigins = [
   "http://localhost:5173",
+  "http://127.0.0.1:5500",
   "https://dreaminalgo.pages.dev"
 ];
 
@@ -63,6 +72,7 @@ app.use('/api/paperlogger',loggerRoutes);
 app.use('/api/trader-signal', traderSignalRoutes);
 app.use('/api/instruments', instrumentRoutes);
 app.use('/api/createstartergy',createStrategyRoutes);
+app.use("/api/", telemetryRoute);
 
 /* Health Check */
 app.get('/health', (req, res) => {
