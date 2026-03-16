@@ -284,6 +284,17 @@ await pool.query(`
   );
 `);
 
+await pool.query(`
+      CREATE TABLE IF NOT EXISTS trade_legs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        startergy_id TEXT,
+        leg VARCHAR(2) CHECK (leg IN ('CE','PE')) NOT NULL,
+        symbol TEXT NOT NULL,
+        strike_price NUMERIC NOT NULL,
+        date DATE NOT NULL
+      );
+    `);
+
     console.log("✅ Database connected & tables verified");
   } catch (error) {
     console.error("❌ Database initialization failed", error);

@@ -14,8 +14,8 @@ import loggerRoutes from "./src/modules/logger/logger.routes.js";
 import traderSignalRoutes from "./src/modules/tradersingal/tradersignal.routes.js";
 import instrumentRoutes from "./src/modules/instruments/instruments.routes.js";
 import createStrategyRoutes from "./src/modules/createstartergy/createstartergy.routes.js";
-
 import telemetryRoute from "./src/modules/websocket/telemetry.route.js";
+import tradeLegRoutes from "./src/modules/tradelegs/tradeleg.routes.js";
 
 
 const app = express();
@@ -68,6 +68,7 @@ app.use('/api/paperlogger',loggerRoutes);
 app.use('/api/trader-signal', traderSignalRoutes);
 app.use('/api/instruments', instrumentRoutes);
 app.use('/api/createstartergy',createStrategyRoutes);
+app.use('/api/tradesignal',tradeLegRoutes);
 app.use("/api/", telemetryRoute);
 
 /* Health Check */
