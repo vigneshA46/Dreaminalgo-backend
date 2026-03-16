@@ -28,6 +28,7 @@ initSocket(server);
 
 /* Security */
 app.use(helmet());
+app.set("trust proxy", 1);
 
 /* Logging */
 if (process.env.NODE_ENV === 'development') {
