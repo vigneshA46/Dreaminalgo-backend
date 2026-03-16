@@ -17,13 +17,8 @@ import createStrategyRoutes from "./src/modules/createstartergy/createstartergy.
 
 import telemetryRoute from "./src/modules/websocket/telemetry.route.js";
 
-import http from 'http'
-import { initSocket } from './src/modules/websocket/socketServer.js';
 
 const app = express();
-const server = http.createServer(app);
-
-initSocket(server);
 
 
 /* Security */

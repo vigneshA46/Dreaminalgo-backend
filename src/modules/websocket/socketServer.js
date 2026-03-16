@@ -7,8 +7,8 @@ export const initSocket = (server) => {
     cors: {
       origin: "*",
       methods: ["GET", "POST"],
-      transports: ["websocket", "polling"]
-    }
+    },  
+    transports: ["websocket", "polling"]
   });
 
   io.on("connection", (socket) => {
