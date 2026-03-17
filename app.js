@@ -10,7 +10,7 @@ import adminRoutes from './src/modules/admin/admin.routes.js';
 import userRoutes from './src/modules/users/users.routes.js';
 import brokerRoutes from './src/modules/broker/broker.routes.js';
 import stratergyRoutes from './src/modules/strategy/strategy.routes.js'
-import loggerRoutes from "./src/modules/logger/logger.routes.js";
+import papertradeRoutes  from "./src/modules/logger/papertrade.routes.js";
 import traderSignalRoutes from "./src/modules/tradersingal/tradersignal.routes.js";
 import instrumentRoutes from "./src/modules/instruments/instruments.routes.js";
 import createStrategyRoutes from "./src/modules/createstartergy/createstartergy.routes.js";
@@ -64,7 +64,7 @@ app.use('/api/admin',adminRoutes);
 app.use('/api/users',userRoutes);
 app.use('/api/broker',brokerRoutes);
 app.use('/api/stratergy',stratergyRoutes);
-app.use('/api/paperlogger',loggerRoutes);
+app.use('/api/paperlogger',papertradeRoutes);
 app.use('/api/trader-signal', traderSignalRoutes);
 app.use('/api/instruments', instrumentRoutes);
 app.use('/api/createstartergy',createStrategyRoutes);
