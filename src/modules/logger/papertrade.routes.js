@@ -1,8 +1,8 @@
 import { Router } from "express";
 import {
-  createPaperTrade,
-  getTradesByDateTokenStrategy,
-  getTradesByDateStrategy
+  createTradeEvent,
+  getEventsByDateTokenStrategy,
+  getEventsByDateStrategy
 } from "./papertrade.controller.js";
 
 import authenticate from "../../middlewares/authenticate.js"; 
@@ -12,44 +12,42 @@ const router = Router();
 
 /*
 -----------------------------------------
-CREATE PAPER TRADE
+CREATE TRADE EVENT (ENTRY / EXIT)
 -----------------------------------------
 */
 router.post(
-  "/papertradelogger",
-   // authenticate,
+  "/event",
+  // authenticate,
   // authorize,
-  createPaperTrade
+  createTradeEvent
 );
 
 
 /*
 -----------------------------------------
-GET BY DATE + TOKEN + STRATEGY
+GET EVENTS BY DATE + TOKEN + STRATEGY
 -----------------------------------------
 Example:
-GET /api/papertrade?date=2026-03-17&token=57735&strategy_id=xxx
+GET /api/papertrade/event/by-token?date=2026-03-17&token=57735&strategy_id=xxx
 -----------------------------------------
 */
 router.get(
-  "/by-token",
-  
-  getTradesByDateTokenStrategy
+  "/event/by-token",
+  getEventsByDateTokenStrategy
 );
 
 
 /*
 -----------------------------------------
-GET BY DATE + STRATEGY
+GET EVENTS BY DATE + STRATEGY
 -----------------------------------------
 Example:
-GET /api/papertrade?date=2026-03-17&strategy_id=xxx
+GET /api/papertrade/event/by-strategy?date=2026-03-17&strategy_id=xxx
 -----------------------------------------
 */
 router.get(
-  "/by-strategy",
-  
-  getTradesByDateStrategy
+  "/event/by-strategy",
+  getEventsByDateStrategy
 );
 
 export default router;

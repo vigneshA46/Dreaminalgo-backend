@@ -182,37 +182,23 @@ export const initDB = async () => {
 
     await pool.query(`
   CREATE TABLE IF NOT EXISTS paper_trades (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    run_id UUID,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
 
-    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
-    strategy_id UUID,
-    leg_name VARCHAR(100),
-
-    token BIGINT,
-    symbol VARCHAR(50),
-
-    side VARCHAR(10),        -- BUY / SELL
-
-    lots INTEGER,
-    quantity INTEGER,
-
-    entry_price NUMERIC,
-    entry_time TIMESTAMP,
-
-    exit_price NUMERIC,
-    exit_time TIMESTAMP,
-
-    pnl NUMERIC,
-    cumulative_pnl NUMERIC,
-
-    trade_status VARCHAR(20),   -- OPEN / CLOSED
-    reason TEXT,
-
-    deployed_by UUID,
-
-    createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  run_id UUID,
+  strategy_id UUID,
+  timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  event_type VARCHAR(20),   -- ENTRY / EXIT
+  leg_name VARCHAR(100),
+  token BIGINT,
+  symbol VARCHAR(50),
+  side VARCHAR(10),         -- BUY / SELL
+  lots INTEGER,
+  quantity INTEGER,
+  price NUMERIC,
+  trade_id UUID,            -- 🔥 links entry & exit
+  reason TEXT,
+  deployed_by UUID,
+  createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   );
 `);
 
@@ -294,6 +280,8 @@ await pool.query(`
         date DATE NOT NULL
       );
     `);
+
+
 
     console.log("✅ Database connected & tables verified");
   } catch (error) {
