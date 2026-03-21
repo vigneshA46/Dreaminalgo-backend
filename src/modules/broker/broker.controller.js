@@ -11,13 +11,15 @@ export const connectBroker = async (req, res) => {
     const userId = req.user.id;
     const { brokerName, credentials } = req.body;
 
+    const normalizedBroker = brokerName.toLowerCase();
+
     if (!brokerName || !credentials) {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
     // Validate broker connection
     const validation = await validateBrokerConnection(
-      brokerName,
+      normalizedBroker,
       credentials
     );
 
@@ -27,18 +29,32 @@ export const connectBroker = async (req, res) => {
       });
     }
 
+    const existing = await pool.query(
+      `
+      SELECT id FROM broker_accounts
+      WHERE user_id = $1 AND broker_name = $2
+      `,
+      [userId, normalizedBroker]
+    );
+
+    if (existing.rows.length > 0) {
+      return res.status(400).json({
+        error: "Broker already connected"
+      });
+    }
+
     const result = await pool.query(
       `
       INSERT INTO broker_accounts
-      (user_id, broker_name, client_id, credentials, status)
+      (user_id, broker_name, credentials, status)
       VALUES ($1,$2,$3,$4,'connected')
       RETURNING *
       `,
-      [userId, brokerName, clientId, credentials]
+      [userId, normalizedBroker, credentials]
     );
 
     res.status(201).json({
-      message: `${brokerName} connected successfully`,
+      message: `${normalizedBroker} connected successfully`,
       broker: result.rows[0]
     });
 

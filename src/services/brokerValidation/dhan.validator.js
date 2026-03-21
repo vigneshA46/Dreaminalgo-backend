@@ -4,38 +4,58 @@ export default async function validateDhan(credentials) {
 
   try {
 
-    const { clientId, accessToken } = credentials;
+    const { clientId, pin, totp } = credentials;
 
-    const response = await axios.get(
-      "https://api.dhan.co/v2/profile",
+    // Basic validation
+    if (!clientId || !pin || !totp) {
+      return {
+        success: false,
+        message: "Missing Dhan credentials",
+      };
+    }
+
+    // API call
+    const response = await axios.post(
+      `https://auth.dhan.co/app/generateAccessToken`,
+      null,
       {
-        headers: {
-          "access-token": accessToken
+        params: {
+          dhanClientId: clientId,
+          pin: pin,
+          totp: totp
         }
       }
     );
 
     const data = response.data;
 
-    if (data.dhanClientId !== clientId) {
+    if (!data.accessToken) {
       return {
         success: false,
-        message: "Client ID does not match Dhan account"
+        message: "Failed to generate Dhan access token"
       };
     }
 
+    // ✅ STANDARDIZED RESPONSE
     return {
       success: true,
       message: "Dhan connected successfully",
-      tokenExpiry: data.tokenValidity,
-      profile: data
+      data: {
+        clientId: data.dhanClientId,
+        accessToken: data.accessToken,
+        tokenExpiry: data.expiryTime,
+        extra: {
+          clientName: data.dhanClientName,
+          ucc: data.dhanClientUcc
+        }
+      }
     };
 
   } catch (error) {
 
     return {
       success: false,
-      message: "Invalid Dhan access token"
+      message: error?.response?.data?.message || "Invalid Dhan credentials"
     };
 
   }
