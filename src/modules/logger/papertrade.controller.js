@@ -23,7 +23,10 @@ export const createTradeEvent = async (req, res) => {
 
       price,
       reason,
-      deployed_by
+      deployed_by,
+
+      pnl,
+      cum_pnl
     } = req.body;
 
     const result = await pool.query(
@@ -41,10 +44,12 @@ export const createTradeEvent = async (req, res) => {
         quantity,
         price,
         reason,
-        deployed_by
+        deployed_by,
+        pnl,
+        cum_pnl
       )
       VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15
       )
       RETURNING *
       `,
@@ -61,7 +66,9 @@ export const createTradeEvent = async (req, res) => {
         quantity,
         price,
         reason,
-        deployed_by
+        deployed_by,
+        pnl,
+        cum_pnl
       ]
     );
 

@@ -198,6 +198,8 @@ export const initDB = async () => {
   trade_id UUID,            -- 🔥 links entry & exit
   reason TEXT,
   deployed_by UUID,
+  pnl TEXT,
+  cum_pnl TEXT,
   createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   );
 `);
