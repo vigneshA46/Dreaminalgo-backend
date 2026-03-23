@@ -4,15 +4,15 @@ import pool from "../../config/db.js";
 export const createLeg = async (req, res) => {
   try {
 
-    const { strategy_id, leg, symbol, strike_price, date } = req.body;
+    const { strategy_id, leg, symbol, strike_price, date , token} = req.body;
 
     const result = await pool.query(
       `
-      INSERT INTO trade_legs (startergy_id, leg, symbol, strike_price, date)
-      VALUES ($1, $2, $3, $4, $5)
+      INSERT INTO trade_legs (startergy_id, leg, symbol, strike_price, date, token)
+      VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *
       `,
-      [strategy_id, leg, symbol, strike_price, date]
+      [strategy_id, leg, symbol, strike_price, date, token]
     );
 
     res.status(201).json({
