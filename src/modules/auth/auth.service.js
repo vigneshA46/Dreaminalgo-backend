@@ -6,6 +6,11 @@ import { sendVerificationEmail } from "../../utils/email.js";
 
 export const signupService = async ({ email, password, fullname }) => {
   const passwordHash = await hashPassword(password);
+  const rawToken = generateToken();
+  const tokenHash = hashToken(rawToken);
+
+  const verifyLink = `${process.env.CLIENT_URL}/verify-email/token=${rawToken}`;
+  await sendVerificationEmail(email, verifyLink);
 
   const userRes = await pool.query(
     `INSERT INTO users (email, passwordhash, fullname, isactive)
@@ -15,8 +20,7 @@ export const signupService = async ({ email, password, fullname }) => {
 
   const userId = userRes.rows[0].id;
 
-  const rawToken = generateToken();
-  const tokenHash = hashToken(rawToken);
+
 
   await pool.query(
     `INSERT INTO email_verifications (user_id, token_hash, expires_at)
@@ -24,8 +28,7 @@ export const signupService = async ({ email, password, fullname }) => {
     [userId, tokenHash]
   );
 
-  const verifyLink = `${process.env.CLIENT_URL}/verify-email?token=${rawToken}`;
-  await sendVerificationEmail(email, verifyLink);
+
 
   return { message: "Verification email sent" };
 };
