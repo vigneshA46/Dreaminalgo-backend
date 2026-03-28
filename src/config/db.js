@@ -296,7 +296,7 @@ await pool.query(`
 
   status VARCHAR(20) DEFAULT 'ACTIVE', -- ACTIVE | STOPPED | FAILED
 
-  multiplier INTEGER NOT NULL
+  multiplier INTEGER NOT NULL,
 
   deployed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
