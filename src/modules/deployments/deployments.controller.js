@@ -51,10 +51,10 @@ export const createDeployment = async (req, res) => {
 
     // ✅ Insert deployment
     const result = await client.query(
-      `INSERT INTO deployments (user_id, strategy_id, type, broker_account_id)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO deployments (user_id, strategy_id, type, broker_account_id , multiplier)
+       VALUES ($1, $2, $3, $4 , $5)
        RETURNING *`,
-      [user_id, strategy_id, type, broker_account_id || null]
+      [user_id, strategy_id, type, broker_account_id || null , multiplier]
     );
 
     await client.query("COMMIT");
