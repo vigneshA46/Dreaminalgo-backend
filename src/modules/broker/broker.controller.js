@@ -46,11 +46,11 @@ export const connectBroker = async (req, res) => {
     const result = await pool.query(
       `
       INSERT INTO broker_accounts
-      (user_id, broker_name, credentials, status)
-      VALUES ($1,$2,$3,$4,'connected')
+      (user_id, broker_name, credentials, status,client_id)
+      VALUES ($1,$2,$3,$4,$5)
       RETURNING *
       `,
-      [userId, normalizedBroker, credentials]
+      [userId, normalizedBroker, credentials,"connected","test123"]
     );
 
     res.status(201).json({
@@ -75,7 +75,7 @@ export const getUserBrokers = async (req, res) => {
 
     const result = await pool.query(
       `
-      SELECT id, broker_name, client_id, status, token_expires_at, created_at
+      SELECT id, broker_name, client_id, status, token_expires_at, created_at, credentials
       FROM broker_accounts
       WHERE user_id = $1
       ORDER BY created_at DESC

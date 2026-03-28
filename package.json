@@ -25,6 +25,7 @@
     "jsonwebtoken": "^9.0.3",
     "morgan": "^1.10.1",
     "nodemailer": "^7.0.11",
+    "otplib": "^13.4.0",
     "pg": "^8.16.3",
     "razorpay": "^2.9.6",
     "sib-api-v3-sdk": "^8.5.0",

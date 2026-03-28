@@ -1,10 +1,19 @@
 import axios from "axios";
+import { generateSync } from "otplib";
+
 
 export default async function validateDhan(credentials) {
 
   try {
 
     const { clientId, pin, totp } = credentials;
+    
+    console.log(clientId , pin , totp)
+    const secret = totp
+
+    const totpin = generateSync({secret});
+
+
 
     // Basic validation
     if (!clientId || !pin || !totp) {
@@ -15,21 +24,24 @@ export default async function validateDhan(credentials) {
     }
 
     // API call
-    const response = await axios.post(
-      `https://auth.dhan.co/app/generateAccessToken`,
-      null,
-      {
-        params: {
-          dhanClientId: clientId,
-          pin: pin,
-          totp: totp
-        }
-      }
-    );
+    const url = "https://auth.dhan.co/app/generateAccessToken";
 
-    const data = response.data;
+    const response = await axios.post(url, null, {
+      params: {
+        dhanClientId: clientId,
+        pin: pin,
+        totp: totpin,
+      },
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
 
-    if (!data.accessToken) {
+    const data =await response.data;
+    await console.log(data)
+    
+
+    if (!data) {
       return {
         success: false,
         message: "Failed to generate Dhan access token"
@@ -40,22 +52,14 @@ export default async function validateDhan(credentials) {
     return {
       success: true,
       message: "Dhan connected successfully",
-      data: {
-        clientId: data.dhanClientId,
-        accessToken: data.accessToken,
-        tokenExpiry: data.expiryTime,
-        extra: {
-          clientName: data.dhanClientName,
-          ucc: data.dhanClientUcc
-        }
-      }
+      data
     };
 
   } catch (error) {
 
     return {
       success: false,
-      message: error?.response?.data?.message || "Invalid Dhan credentials"
+      message: error
     };
 
   }

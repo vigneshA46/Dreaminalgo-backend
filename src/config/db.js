@@ -92,7 +92,7 @@ export const initDB = async () => {
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 
   broker_name VARCHAR(50) NOT NULL,
-  client_id VARCHAR(100) NOT NULL,
+  client_id VARCHAR(100) ,
 
   credentials JSONB NOT NULL,
 
@@ -283,6 +283,24 @@ await pool.query(`
       );
     `);
 
+  await pool.query(
+    `CREATE TABLE IF NOT EXISTS deployments (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  strategy_id UUID NOT NULL,
+
+  type VARCHAR(20) NOT NULL, -- paper | dhan | angelone
+
+  broker_account_id UUID NULL REFERENCES broker_accounts(id) ON DELETE SET NULL,
+
+  status VARCHAR(20) DEFAULT 'ACTIVE', -- ACTIVE | STOPPED | FAILED
+
+  deployed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);`
+  )
 
 
     console.log("✅ Database connected & tables verified");
