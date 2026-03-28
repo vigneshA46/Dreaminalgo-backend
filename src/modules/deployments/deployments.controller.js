@@ -22,7 +22,7 @@ export const createDeployment = async (req, res) => {
   const client = await pool.connect();
 
   try {
-    const { strategy_id, type, broker_account_id } = req.body;
+    const { strategy_id, type, broker_account_id ,multiplier} = req.body;
     const user_id = req.user.id;
 
     await client.query("BEGIN");

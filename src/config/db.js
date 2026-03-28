@@ -148,7 +148,7 @@ export const initDB = async () => {
         `)
 
 
-      await pool.query(`
+ /*      await pool.query(`
         CREATE TABLE IF NOT EXISTS deployments (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
 
@@ -166,9 +166,9 @@ export const initDB = async () => {
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   );`)
+ */
 
-
-        await pool.query(`CREATE TABLE IF NOT EXISTS deployment_runtime (
+     /*    await pool.query(`CREATE TABLE IF NOT EXISTS deployment_runtime (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
 
   deployment_id UUID UNIQUE REFERENCES deployments(id) ON DELETE CASCADE,
@@ -178,7 +178,7 @@ export const initDB = async () => {
 
   last_heartbeat TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  );`)
+  );`) */
 
     await pool.query(`
   CREATE TABLE IF NOT EXISTS paper_trades (
@@ -296,11 +296,14 @@ await pool.query(`
 
   status VARCHAR(20) DEFAULT 'ACTIVE', -- ACTIVE | STOPPED | FAILED
 
+  multiplier INTEGER NOT NULL
+
   deployed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );`
   )
+
 
 
     console.log("✅ Database connected & tables verified");
