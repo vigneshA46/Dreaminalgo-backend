@@ -91,6 +91,8 @@ export const getUserBrokers = async (req, res) => {
   }
 };
 
+
+
 /*
   GET SINGLE BROKER
 */
@@ -182,3 +184,27 @@ export const updateBrokerStatus = async (req, res) => {
   }
 };
  
+
+/* get useer base broker */
+
+export const getUserbaseBrokers = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const result = await pool.query(
+      `
+      SELECT id, broker_name
+      FROM broker_accounts
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+      `,
+      [userId]
+    );
+
+    res.json(result.rows);
+
+  } catch (error) {
+    console.error("Get Brokers Error:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+};

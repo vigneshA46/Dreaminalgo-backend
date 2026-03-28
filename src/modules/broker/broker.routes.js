@@ -24,6 +24,13 @@ router.get(
   brokerController.getUserBrokers
 );
 
+
+router.get(
+  "/userbase",
+  authenticate,
+  brokerController.getUserbaseBrokers
+)
+
 /*
   GET SINGLE BROKER
 */
@@ -51,5 +58,7 @@ router.patch(
   authorize("superadmin", "admin"),
   brokerController.updateBrokerStatus
 );
+
+
 
 export default router;
