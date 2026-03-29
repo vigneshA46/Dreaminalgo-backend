@@ -50,10 +50,14 @@ export default async function validateDhan(credentials) {
 
     // ✅ STANDARDIZED RESPONSE
     return {
-      success: true,
-      message: "Dhan connected successfully",
-      data
-    };
+  success: true,
+  message: "Dhan connected successfully",
+  data: {
+    clientId: data.dhanClientId,
+    accessToken: data.accessToken,
+    expiryTime: data.expiryTime
+  }
+};
 
   } catch (error) {
 

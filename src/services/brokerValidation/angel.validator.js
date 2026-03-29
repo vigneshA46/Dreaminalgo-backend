@@ -37,6 +37,7 @@ export default async function validateAngel(credentials) {
     );
 
     const data = response.data;
+    console.log(data)
 
     if (!data.status) {
       return {

@@ -61,6 +61,7 @@ export const createDeployment = async (req, res) => {
 
     res.json({
       success: true,
+
       deployment: result.rows[0]
     });
 
@@ -136,6 +137,29 @@ export const getUserDeployments = async (req, res) => {
        ORDER BY deployed_at DESC`,
       [user_id]
     );
+
+    res.json(result.rows);
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export const getUsertodayDeployment = async (req, res) => {
+  try {
+
+    const user_id = req.user.id;
+
+
+    const result = await pool.query(
+  `SELECT d.*
+   FROM deployments d
+   WHERE d.user_id = $1
+   AND d.deployed_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
+       BETWEEN date_trunc('day', now() AT TIME ZONE 'Asia/Kolkata')
+       AND date_trunc('day', now() AT TIME ZONE 'Asia/Kolkata') + interval '1 day' - interval '1 second'`,
+  [user_id]
+);
 
     res.json(result.rows);
 

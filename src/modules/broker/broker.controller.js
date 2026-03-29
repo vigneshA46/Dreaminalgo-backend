@@ -43,20 +43,61 @@ export const connectBroker = async (req, res) => {
       });
     }
 
+    
+
+    if(normalizedBroker == 'dhan'){
+      
+      const brokerData = {
+      clientId: validation.data.clientId,
+      pin: credentials.pin,
+      totp: credentials.totp, // (your secret)
+      accessToken: validation.data.accessToken,
+      expiryTime: validation.data.expiryTime
+    };
     const result = await pool.query(
-      `
+    `
       INSERT INTO broker_accounts
-      (user_id, broker_name, credentials, status,client_id)
+      (user_id, broker_name, credentials, status, client_id)
       VALUES ($1,$2,$3,$4,$5)
       RETURNING *
       `,
-      [userId, normalizedBroker, credentials,"connected","test123"]
+    [
+      userId,
+      normalizedBroker,
+      brokerData,
+      "connected",
+      "test"
+    ]
     );
 
     res.status(201).json({
       message: `${normalizedBroker} connected successfully`,
       broker: result.rows[0]
     });
+
+    }
+    else if(normalizedBroker == 'angelone'){
+      const result = await pool.query(
+    `
+      INSERT INTO broker_accounts
+      (user_id, broker_name, credentials, status, client_id)
+      VALUES ($1,$2,$3,$4,$5)
+      RETURNING *
+      `,
+    [
+      userId,
+      normalizedBroker,
+      credentials,
+      "connected",
+      "test"
+    ]
+    );
+
+    res.status(201).json({
+      message: `${normalizedBroker} connected successfully`,
+      broker: result.rows[0]
+    });
+    }
 
   } catch (error) {
 

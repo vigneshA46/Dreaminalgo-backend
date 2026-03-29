@@ -18,8 +18,11 @@ router.get(
   "/today/:strategy_id/:type",
   controller.getTodayDeploymentsByStrategyAndType
 );
+router.get("/user/today", authenticate, controller.getUsertodayDeployment);
 
 // Get all user deployments
 router.get("/user/all", authenticate, controller.getUserDeployments);
+
+
 
 export default router;
