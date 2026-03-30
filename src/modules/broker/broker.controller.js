@@ -224,6 +224,36 @@ export const updateBrokerStatus = async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 };
+
+export const updateBrokerCredentials = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { credentials } = req.body; // should be an object
+
+    const result = await pool.query(
+      `
+      UPDATE broker_accounts
+      SET credentials = $1, updated_at = NOW()
+      WHERE id = $2
+      RETURNING *
+      `,
+      [credentials, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Broker not found" });
+    }
+
+    res.json({
+      message: "Credentials updated",
+      broker: result.rows[0],
+    });
+
+  } catch (error) {
+    console.error("Update Credentials Error:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+};
  
 
 /* get useer base broker */

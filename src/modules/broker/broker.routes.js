@@ -59,6 +59,11 @@ router.patch(
   brokerController.updateBrokerStatus
 );
 
+router.patch(
+"/:id/credentials",
+  brokerController.updateBrokerCredentials
+);
+
 
 
 export default router;
