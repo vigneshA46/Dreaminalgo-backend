@@ -37,7 +37,7 @@ const allowedOrigins = [
   "http://127.0.0.1:5500",
   "https://dreaminalgo.pages.dev",
   "https://dreaminalgo-frontend.vercel.app/",
-  "https://algo.dreamintraders.in/"
+  "https://algo.dreamintraders.in"
 ];
 
 app.use(
