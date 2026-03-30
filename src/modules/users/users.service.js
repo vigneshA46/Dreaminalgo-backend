@@ -3,7 +3,7 @@ import pool from '../../config/db.js';
 /* Get own profile */
 export const getMe = async (userId) => {
   const { rows } = await pool.query(
-    'SELECT id, email, fullname, role, isactive, createdat FROM users WHERE id = $1',
+    'SELECT id, email, fullname, role, isactive, createdat, tokens FROM users WHERE id = $1',
     [userId]
   );
   return rows[0];
