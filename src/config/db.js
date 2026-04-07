@@ -316,7 +316,7 @@ CREATE TABLE IF NOT EXISTS real_trades (
 `);
 
      await pool.query(`
-      CREATE TABLE tutorials (
+      CREATE TABLE IF NOT EXISTS tutorials (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     title TEXT NOT NULL,
     url TEXT NOT NULL,
