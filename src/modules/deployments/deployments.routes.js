@@ -23,6 +23,11 @@ router.get("/user/today", authenticate, controller.getUsertodayDeployment);
 // Get all user deployments
 router.get("/user/all", authenticate, controller.getUserDeployments);
 
+// Get deployments by date
+router.get("/by-date", authenticate, controller.getDeploymentsByDate);
+
+// Grouped by strategy
+router.get("/grouped/strategy", authenticate, controller.getDeploymentsGroupedByStrategy);
 
 
 export default router;

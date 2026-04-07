@@ -25,6 +25,7 @@ export const initDB = async () => {
     passwordhash TEXT,
     fullname VARCHAR(255),
     role VARCHAR(50) DEFAULT 'user',
+    mobile_number TEXT,
     isactive BOOLEAN DEFAULT true,
     tokens INTEGER DEFAULT 0,
     auth_provider VARCHAR(20) NOT NULL DEFAULT 'local',

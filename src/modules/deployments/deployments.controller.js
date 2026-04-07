@@ -167,3 +167,68 @@ export const getUsertodayDeployment = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+
+export const getDeploymentsByDate = async (req, res) => {
+  try {
+    const { date } = req.query; // format: YYYY-MM-DD
+
+    if (!date) {
+      return res.status(400).json({ error: "Date is required" });
+    }
+
+    const result = await pool.query(
+      `SELECT d.*, u.fullname, u.email, u.mobile_number
+       FROM deployments d
+       JOIN users u ON d.user_id = u.id
+       WHERE d.deployed_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
+       BETWEEN $1::date
+       AND $1::date + interval '1 day' - interval '1 second'
+       ORDER BY d.deployed_at DESC`,
+      [date]
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export const getDeploymentsGroupedByStrategy = async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT 
+          d.strategy_id,
+
+          COUNT(*) as total_deployments,
+
+          COUNT(*) FILTER (WHERE d.type = 'LIVE') as live_count,
+          COUNT(*) FILTER (WHERE d.type = 'PAPER') as paper_count,
+
+          JSON_AGG(
+            JSON_BUILD_OBJECT(
+              'id', d.id,
+              'type', d.type,
+              'deployed_at', d.deployed_at,
+              'multiplier', d.multiplier,
+              'user', JSON_BUILD_OBJECT(
+                'id', u.id,
+                'fullname', u.fullname,
+                'email', u.email,
+                'mobile_number', u.mobile_number
+              )
+            )
+          ) as deployments
+
+       FROM deployments d
+       JOIN users u ON d.user_id = u.id
+
+       GROUP BY d.strategy_id
+       ORDER BY d.strategy_id`
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
