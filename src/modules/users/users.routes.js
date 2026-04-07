@@ -25,7 +25,6 @@ res.json(user);
 router.post(
 '/',
 authenticate,
-authorize('superadmin'),
 async (req, res) => {
   const users = await userService.getAllUsers();
   res.json(users);
