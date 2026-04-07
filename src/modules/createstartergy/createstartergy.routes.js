@@ -14,7 +14,7 @@ import  authorize  from '../../middlewares/authorize.js';
 
 const router = express.Router();
 
-router.get("/all",authenticate, getAllStrategy);
+router.post("/all",authenticate, getAllStrategy);
 
 /* CREATE */
 router.post("/create",authenticate, createStrategy);

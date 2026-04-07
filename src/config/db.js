@@ -315,6 +315,15 @@ CREATE TABLE IF NOT EXISTS real_trades (
 );
 `);
 
+     await pool.query(`
+      CREATE TABLE tutorials (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    title TEXT NOT NULL,
+    url TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+      `)
+
 
 
     console.log("✅ Database connected & tables verified");

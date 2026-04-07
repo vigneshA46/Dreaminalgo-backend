@@ -22,7 +22,7 @@ res.json(user);
 });
 
 /* ADMIN */
-router.get(
+router.post(
 '/',
 authenticate,
 authorize('superadmin'),
