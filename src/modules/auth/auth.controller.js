@@ -30,3 +30,35 @@ export const verifyEmail = async (req, res) => {
   await authService.verifyEmailService(req.query.token);
   res.json({ message: "Email verified successfully" });
 };
+
+
+export const changePassword = async (req, res) => {
+  try {
+
+    const userId = req.user.id; // ✅ from auth middleware
+    const { password } = req.body;
+
+    if (!password) {
+      return res.status(400).json({
+        success: false,
+        message: "Password is required"
+      });
+    }
+
+    const result = await authService.changePasswordService(userId, password);
+
+    res.json({
+      success: true,
+      ...result
+    });
+
+  } catch (error) {
+
+    console.error("Change Password Error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message || "Failed to change password"
+    });
+  }
+};

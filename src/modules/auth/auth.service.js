@@ -82,3 +82,25 @@ export const verifyEmailService = async (token) => {
     [record.id]
   );
 };
+
+
+export const changePasswordService = async (userId, newPassword) => {
+  // 🔐 hash new password
+  const passwordHash = await hashPassword(newPassword);
+
+  const result = await pool.query(
+    `
+    UPDATE users
+    SET passwordhash = $1
+    WHERE id = $2
+    RETURNING id
+    `,
+    [passwordHash, userId]
+  );
+
+  if (result.rowCount === 0) {
+    throw new Error("User not found");
+  }
+
+  return { message: "Password updated successfully" };
+};

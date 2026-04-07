@@ -17,6 +17,7 @@ import createStrategyRoutes from "./src/modules/createstartergy/createstartergy.
 import telemetryRoute from "./src/modules/websocket/telemetry.route.js";
 import tradeLegRoutes from "./src/modules/tradelegs/tradeleg.routes.js";
 import deploymentroutes from "./src/modules/deployments/deployments.routes.js"
+import realtraderoutes from "./src/modules/realtrades/realtrades.routes.js"
 
 
 const app = express();
@@ -73,6 +74,7 @@ app.use('/api/instruments', instrumentRoutes);
 app.use('/api/createstartergy',createStrategyRoutes);
 app.use('/api/tradelegs',tradeLegRoutes);
 app.use('/api/deployments',deploymentroutes);
+app.use('/api/realtrades',realtraderoutes);
 app.use("/api/", telemetryRoute);
 
 /* Health Check */

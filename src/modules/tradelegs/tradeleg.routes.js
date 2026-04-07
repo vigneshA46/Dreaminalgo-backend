@@ -3,7 +3,8 @@ import {
   createLeg,
   getLegsByDate,
   getLatestLegs,
-  getDatesByStrategy
+  getDatesByStrategy,
+  updateLegPnl
 } from "./tradeleg.controller.js";
 
 const router = express.Router();
@@ -19,5 +20,7 @@ router.get("/latest/:strategy_id", getLatestLegs);
 
 /* GET DATES FOR A STARTERGY */
 router.get("/dates/:strategy_id", getDatesByStrategy);
+
+router.put("/stratergy/pnl",updateLegPnl)
 
 export default router;

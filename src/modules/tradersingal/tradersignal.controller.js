@@ -198,3 +198,40 @@ export const getSignalById = async (req, res) => {
   }
 
 };
+
+
+
+export const deleteSignal = async (req, res) => {
+  try {
+
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `DELETE FROM trader_signal WHERE id = $1 RETURNING *`,
+      [id]
+    );
+
+    // ✅ check if signal exists
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Signal not found"
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Signal deleted successfully",
+      data: result.rows[0] // optional (deleted row)
+    });
+
+  } catch (error) {
+
+    console.error("Delete Signal Error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete signal"
+    });
+  }
+};

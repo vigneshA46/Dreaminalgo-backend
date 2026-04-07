@@ -9,6 +9,8 @@ export const getMe = async (userId) => {
   return rows[0];
 };
 
+
+
 /* Update own profile */
 export const updateMe = async (userId, data) => {
   const { fullname } = data;
@@ -28,7 +30,7 @@ export const updateMe = async (userId, data) => {
 /* Admin: get all users */
 export const getAllUsers = async () => {
   const { rows } = await pool.query(
-    'SELECT id, email, fullname, role, isactive, createdat FROM users ORDER BY createdat DESC'
+    'SELECT id, email, fullname, role, isactive, createdat, tokens FROM users ORDER BY createdat DESC'
   );
   return rows;
 };
@@ -36,7 +38,7 @@ export const getAllUsers = async () => {
 /* Admin: get single user */
 export const getUserById = async (id) => {
   const { rows } = await pool.query(
-    'SELECT id, email, fullname, role, isactive FROM users WHERE id = $1',
+    'SELECT id, email, fullname, role, isactive, tokens FROM users WHERE id = $1',
     [id]
   );
   return rows[0];

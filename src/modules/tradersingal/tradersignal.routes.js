@@ -8,7 +8,8 @@ import {
   getSignalsByDate,
   getSignalsByUserId,
   getSignalById,
-  getSignalsBystatus
+  getSignalsBystatus,
+  deleteSignal
 } from "./tradersignal.controller.js";
 
 const router = Router();
@@ -26,6 +27,9 @@ router.get("/date/:date" , authenticate, getSignalsByDate);
 router.get("/user" , authenticate, getSignalsByUserId);
 
 router.get("/status/:status",authenticate, getSignalsBystatus);
+
+router.delete("/signals/:id",authenticate, deleteSignal);
+
 /* GET SINGLE SIGNAL */
 router.get("/:id",authenticate, getSignalById);
 

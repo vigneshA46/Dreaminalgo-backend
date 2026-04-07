@@ -16,3 +16,4 @@ const csv = [
 fs.writeFileSync("paper_trades.csv", csv);
 
 console.log("Exported!");
+ 

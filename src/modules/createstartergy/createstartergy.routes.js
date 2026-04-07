@@ -14,14 +14,15 @@ import  authorize  from '../../middlewares/authorize.js';
 
 const router = express.Router();
 
+router.get("/all",authenticate, getAllStrategy);
+
 /* CREATE */
 router.post("/create",authenticate, createStrategy);
 
 /* GET ALL */
-router.get("/",authenticate,authorize, getAllStrategy);
 
 /* GET ADMIN */
-router.get("/admin",authenticate,authorize, getAdminStrategy);
+router.get("/admin",authenticate , authorize('superadmin'), getAdminStrategy);
 
 router.get("/:id",authenticate, getSingleStrategy);
 /* GET USER */

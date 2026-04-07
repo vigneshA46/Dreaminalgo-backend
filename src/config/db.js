@@ -147,39 +147,6 @@ export const initDB = async () => {
   );  
         `)
 
-
- /*      await pool.query(`
-        CREATE TABLE IF NOT EXISTS deployments (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-
-  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-  strategy_id UUID REFERENCES strategies(id),
-
-  broker_account_id UUID REFERENCES broker_accounts(id),
-
-  status VARCHAR(20) DEFAULT 'pending',
-  -- pending / running / stopped / error
-
-  deployed_at TIMESTAMP,
-  stopped_at TIMESTAMP,
-
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  );`)
- */
-
-     /*    await pool.query(`CREATE TABLE IF NOT EXISTS deployment_runtime (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-
-  deployment_id UUID UNIQUE REFERENCES deployments(id) ON DELETE CASCADE,
-
-  state JSONB,
-  -- positions, pnl, last signal, etc
-
-  last_heartbeat TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  );`) */
-
     await pool.query(`
   CREATE TABLE IF NOT EXISTS paper_trades (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -279,7 +246,8 @@ await pool.query(`
         leg VARCHAR(2) CHECK (leg IN ('CE','PE')) NOT NULL,
         symbol TEXT NOT NULL,
         strike_price NUMERIC NOT NULL,
-        date DATE NOT NULL
+        date DATE NOT NULL,
+        pnl NUMERIC DEFAULT 0
       );
     `);
 
@@ -303,6 +271,49 @@ await pool.query(`
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );`
   )
+
+  await pool.query(`
+CREATE TABLE IF NOT EXISTS real_trades (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+
+    user_id BIGINT NOT NULL,
+    strategy_id BIGINT NOT NULL,
+    broker_id BIGINT NOT NULL,
+
+    order_id VARCHAR(100),
+
+    event_type VARCHAR(10) NOT NULL,
+    leg_name VARCHAR(10),
+    symbol VARCHAR(50) NOT NULL,
+
+    side VARCHAR(10) NOT NULL,
+    order_type VARCHAR(10),
+    product_type VARCHAR(20),
+    exchange VARCHAR(10),
+
+    lot INTEGER,
+    quantity INTEGER NOT NULL,
+    filled_quantity INTEGER DEFAULT 0,
+
+    price NUMERIC(10, 2),
+    average_price NUMERIC(10, 2),
+
+    status VARCHAR(15) NOT NULL,
+
+    reason TEXT,
+
+    timestamp TIMESTAMP NOT NULL,
+    executed_at TIMESTAMP,
+
+    pnl NUMERIC(12, 2) DEFAULT 0,
+    cum_pnl NUMERIC(12, 2) DEFAULT 0,
+
+    raw_response JSONB,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+`);
 
 
 

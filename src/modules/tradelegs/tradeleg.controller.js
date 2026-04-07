@@ -41,7 +41,8 @@ export const getLegsByDate = async (req, res) => {
 
     const result = await pool.query(
       `
-      SELECT *
+      SELECT *,
+             COALESCE(pnl, 0) as pnl
       FROM trade_legs
       WHERE startergy_id = $1
       AND date = $2
@@ -50,9 +51,15 @@ export const getLegsByDate = async (req, res) => {
       [strategy_id, date]
     );
 
+    // ✅ calculate total pnl
+    const total_pnl = result.rows.reduce((sum, leg) => {
+      return sum + parseFloat(leg.pnl || 0);
+    }, 0);
+
     res.json({
       success: true,
-      data: result.rows
+      data: result.rows,
+      total_pnl
     });
 
   } catch (error) {
@@ -67,7 +74,6 @@ export const getLegsByDate = async (req, res) => {
 };
 
 
-
 /* GET LATEST LEGS BY STRATEGY */
 export const getLatestLegs = async (req, res) => {
   try {
@@ -76,7 +82,8 @@ export const getLatestLegs = async (req, res) => {
 
     const result = await pool.query(
       `
-      SELECT *
+      SELECT *,
+             COALESCE(pnl, 0) as pnl
       FROM trade_legs
       WHERE startergy_id = $1
       ORDER BY date DESC
@@ -100,7 +107,6 @@ export const getLatestLegs = async (req, res) => {
     });
   }
 };
-
 /*
 -----------------------------------------
 GET ALL DATES BY STRATEGY
@@ -134,6 +140,40 @@ export const getDatesByStrategy = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch dates"
+    });
+  }
+};
+
+
+export const updateLegPnl = async (req, res) => {
+  try {
+
+    const { strategy_id, date, token, pnl } = req.body;
+
+    const result = await pool.query(
+      `
+      UPDATE trade_legs
+      SET pnl = $1
+      WHERE startergy_id = $2
+      AND date = $3
+      AND token = $4
+      RETURNING *
+      `,
+      [pnl, strategy_id, date, token]
+    );
+
+    res.json({
+      success: true,
+      data: result.rows[0]
+    });
+
+  } catch (error) {
+
+    console.error("Update PnL Error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to update pnl"
     });
   }
 };
