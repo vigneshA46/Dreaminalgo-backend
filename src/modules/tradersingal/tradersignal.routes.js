@@ -8,8 +8,10 @@ import {
   getSignalsByDate,
   getSignalsByUserId,
   getSignalById,
-  getSignalsBystatus,
-  deleteSignal
+  deleteSignal,
+  getApprovedsignals,
+  getunApprovedsignals,
+  approveSignal
 } from "./tradersignal.controller.js";
 
 const router = Router();
@@ -26,7 +28,11 @@ router.get("/date/:date" , authenticate, getSignalsByDate);
 /* GET SIGNALS BY USER */
 router.get("/user" , authenticate, getSignalsByUserId);
 
-router.get("/status/:status",authenticate, getSignalsBystatus);
+router.get("/status/true",authenticate, getApprovedsignals);
+
+router.get("/status/false",authenticate, getunApprovedsignals);
+
+router.patch('/signals/approve/:id', approveSignal);
 
 router.delete("/signals/:id",authenticate, deleteSignal);
 

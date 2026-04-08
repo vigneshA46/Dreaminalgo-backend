@@ -204,6 +204,7 @@ CREATE TABLE IF NOT EXISTS trader_signal (
     description TEXT,
     index_name TEXT NOT NULL,
     config_json JSONB NOT NULL,
+    isapproved BOOLEAN DEFAULT false,
     status TEXT DEFAULT 'inactive',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

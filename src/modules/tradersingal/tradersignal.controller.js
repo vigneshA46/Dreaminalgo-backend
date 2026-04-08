@@ -135,17 +135,18 @@ export const getSignalsByUserId = async (req, res) => {
 };
 
 /* GET SIGNALS BY STATUS */
-export const getSignalsBystatus = async (req, res) => {
+
+export const getApprovedsignals = async (req, res) => {
 
   try {
 
-    const { status } = req.params;
+    
 
     const result = await pool.query(
       `SELECT * FROM trader_signal
-       WHERE status = $1
+       WHERE isapproved = true
        ORDER BY created_at DESC`,
-       [status]
+       
     );
 
     res.json({
@@ -164,6 +165,75 @@ export const getSignalsBystatus = async (req, res) => {
 
   }
 
+};
+
+
+export const getunApprovedsignals = async (req, res) => {
+
+  try {
+
+    
+
+    const result = await pool.query(
+      `SELECT * FROM trader_signal
+       WHERE isapproved = false
+       ORDER BY created_at DESC`,
+       
+    );
+
+    res.json({
+      success: true,
+      data: result.rows
+    });
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch published signals"
+    });
+
+  }
+
+};
+
+
+/* aprove a singa using id */
+export const approveSignal = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query(
+      `UPDATE trader_signal
+       SET isapproved = true
+       WHERE id = $1
+       RETURNING *`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Signal not found",
+      });
+    }
+
+    res.json({
+      success: true,
+      data: result.rows[0],
+      message: "Signal approved successfully",
+    });
+
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to approve signal",
+    });
+  }
 };
 
 
