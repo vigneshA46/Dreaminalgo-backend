@@ -112,6 +112,9 @@ export const getLatestLegs = async (req, res) => {
 GET ALL DATES BY STRATEGY
 -----------------------------------------
 */
+
+
+
 export const getDatesByStrategy = async (req, res) => {
   try {
 
@@ -145,6 +148,7 @@ export const getDatesByStrategy = async (req, res) => {
 };
 
 
+
 export const updateLegPnl = async (req, res) => {
   try {
 
@@ -174,6 +178,99 @@ export const updateLegPnl = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to update pnl"
+    });
+  }
+};
+
+
+
+export const getStrategyDetailedPnl = async (req, res) => {
+  try {
+
+    const { strategy_id, date } = req.query;
+
+    /* ------------------------ -----------------
+       1. GET LEGS
+    ----------------------------------------- */
+    const legsResult = await pool.query(
+      `
+      SELECT DISTINCT ON (token) *
+      FROM trade_legs
+      WHERE startergy_id = $1
+      AND date = $2
+      ORDER BY token, date DESC
+      `,
+      [strategy_id, date]
+    );
+
+    const legs = legsResult.rows;
+
+    /* -----------------------------------------
+       2. GET PNL FOR EACH TOKEN
+    ----------------------------------------- */
+    const legPnls = {};
+
+    for (const leg of legs) {
+
+      const pnlResult = await pool.query(
+        `
+        SELECT COALESCE(CAST(pnl AS NUMERIC), 0) as pnl
+        FROM paper_trades
+        WHERE strategy_id = $1
+        AND DATE(timestamp) = $2
+        AND token = $3
+        AND event_type = 'EXIT'
+        ORDER BY timestamp DESC
+        LIMIT 1
+        `,
+        [strategy_id, date, leg.token]
+      );
+
+      legPnls[leg.token] = {
+        symbol: leg.symbol,
+        leg: leg.leg,
+        pnl: pnlResult.rows[0]?.pnl || 0
+      };
+    }
+
+    /* -----------------------------------------
+       3. TOTAL PNL (sum of all legs)
+    ----------------------------------------- */
+    const total_pnl = Object.values(legPnls).reduce((sum, l) => {
+      return sum + parseFloat(l.pnl || 0);
+    }, 0);
+
+    /* -----------------------------------------
+       4. CUMULATIVE PNL (LATEST EXIT)
+    ----------------------------------------- */
+    const cumResult = await pool.query(
+      `
+      SELECT COALESCE(CAST(cum_pnl AS NUMERIC), 0) as cum_pnl
+      FROM paper_trades
+      WHERE strategy_id = $1
+      AND DATE(timestamp) = $2
+      AND event_type = 'EXIT'
+      ORDER BY timestamp DESC
+      LIMIT 1
+      `,
+      [strategy_id, date]
+    );
+
+    res.json({
+      success: true,
+      legs,
+      leg_pnls: legPnls,
+      total_pnl,
+      cumulative_pnl: cumResult.rows[0]?.cum_pnl || 0
+    });
+
+  } catch (error) {
+
+    console.error("Detailed PnL Error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch detailed pnl"
     });
   }
 };

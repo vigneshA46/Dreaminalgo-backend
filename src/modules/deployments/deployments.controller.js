@@ -145,6 +145,7 @@ export const getUserDeployments = async (req, res) => {
   }
 };
 
+
 export const getUsertodayDeployment = async (req, res) => {
   try {
 
@@ -159,7 +160,7 @@ export const getUsertodayDeployment = async (req, res) => {
        BETWEEN date_trunc('day', now() AT TIME ZONE 'Asia/Kolkata')
        AND date_trunc('day', now() AT TIME ZONE 'Asia/Kolkata') + interval '1 day' - interval '1 second'`,
   [user_id]
-);
+   );
 
     res.json(result.rows);
 
@@ -193,6 +194,7 @@ export const getDeploymentsByDate = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
 
 export const getDeploymentsGroupedByStrategy = async (req, res) => {
   try {
@@ -232,3 +234,4 @@ export const getDeploymentsGroupedByStrategy = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+

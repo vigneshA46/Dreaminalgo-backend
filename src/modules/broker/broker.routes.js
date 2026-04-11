@@ -15,10 +15,18 @@ router.post(
   brokerController.connectBroker
 );
 
+router.post(
+  "/alice/callback",
+  authenticate,
+  brokerController.aliceCallback
+);
+
+router.post("/alice/session", authenticate, brokerController.aliceSession);
+
 /*
   GET USER BROKERS
 */
-router.get(
+router.get( 
   "/",
   authenticate,
   brokerController.getUserBrokers
