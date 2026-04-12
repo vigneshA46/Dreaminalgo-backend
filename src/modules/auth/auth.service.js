@@ -4,33 +4,33 @@ import { signAccessToken, signRefreshToken } from "../../utils/jwt.js";
 import { generateToken, hashToken } from "../../utils/crypto.js";
 import { sendVerificationEmail } from "../../utils/email.js";
 
-export const signupService = async ({ email, password, fullname }) => {
+export const signupService = async ({ email, password, fullname, mobile_number }) => {
   const passwordHash = await hashPassword(password);
   const rawToken = generateToken();
   const tokenHash = hashToken(rawToken);
 
-  const verifyLink = `${process.env.CLIENT_URL}/verify-email/token=${rawToken}`;
+/*   const verifyLink = `${process.env.CLIENT_URL}/verify-email/token=${rawToken}`;
   await sendVerificationEmail(email, verifyLink);
-
+ */
   const userRes = await pool.query(
-    `INSERT INTO users (email, passwordhash, fullname, isactive)
-     VALUES ($1, $2, $3, false) RETURNING id`,
-    [email, passwordHash, fullname]
+    `INSERT INTO users (email, passwordhash, fullname, mobile_number , isactive)
+     VALUES ($1, $2, $3 , $4, false) RETURNING id`,
+    [email, passwordHash, fullname ,mobile_number ]
   );
 
   const userId = userRes.rows[0].id;
 
 
 
-  await pool.query(
+/*   await pool.query(
     `INSERT INTO email_verifications (user_id, token_hash, expires_at)
      VALUES ($1, $2, NOW() + INTERVAL '24 hours')`,
     [userId, tokenHash]
   );
+ */
 
 
-
-  return { message: "Verification email sent" };
+  return { message: "Contact Admin for verification" };
 };
 
 
