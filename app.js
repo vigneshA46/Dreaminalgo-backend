@@ -39,7 +39,8 @@ const allowedOrigins = [
   "https://dreaminalgo.pages.dev",
   "https://dreaminalgo-frontend.vercel.app/",
   "https://algo.dreamintraders.in",
-  "https://dreaminalgo-admin.pages.dev"
+  "https://dreaminalgo-admin.pages.dev",
+  "https://hasan3324algoadmin.dreamintraders.in"
 ];
 
 app.use(
