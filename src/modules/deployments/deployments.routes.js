@@ -29,5 +29,7 @@ router.get("/by-date", authenticate, controller.getDeploymentsByDate);
 // Grouped by strategy
 router.get("/grouped/strategy", authenticate, controller.getDeploymentsGroupedByStrategy);
 
+router.get("/userdep/all", authenticate, controller.getUserDeploymentsGroupedWithPnl);
+
 
 export default router;

@@ -235,3 +235,122 @@ export const getDeploymentsGroupedByStrategy = async (req, res) => {
   }
 };
 
+
+export const getUserDeploymentsGroupedWithPnl = async (req, res) => {
+  try {
+    const user_id = req.user.id;
+
+    const result = await pool.query(
+      `
+      WITH user_deployments AS (
+        SELECT 
+          d.*,
+          s.name as strategy_name,
+          DATE(d.deployed_at AT TIME ZONE 'Asia/Kolkata') as deploy_date
+        FROM deployments d
+        JOIN strategies s ON d.strategy_id = s.id
+        WHERE d.user_id = $1
+      ),
+
+      /* ---------------- DAILY CUM PNL ---------------- */
+      daily_cum AS (
+        SELECT 
+          strategy_id,
+          DATE(timestamp AT TIME ZONE 'Asia/Kolkata') as date,
+
+          (ARRAY_AGG(cum_pnl::NUMERIC ORDER BY timestamp DESC))[1] as day_cum_pnl
+
+        FROM paper_trades
+        WHERE event_type = 'EXIT'
+        GROUP BY strategy_id, DATE(timestamp AT TIME ZONE 'Asia/Kolkata')
+      ),
+
+      /* ---------------- DAILY PNL ---------------- */
+      daily_pnl AS (
+        SELECT 
+          strategy_id,
+          date,
+          day_cum_pnl,
+
+          day_cum_pnl - COALESCE(
+            LAG(day_cum_pnl) OVER (
+              PARTITION BY strategy_id ORDER BY date
+            ),
+            0
+          ) as day_pnl
+
+        FROM daily_cum
+      ),
+
+      /* ---------------- TODAY PNL ---------------- */
+      today_pnl AS (
+        SELECT strategy_id,
+               COALESCE(day_cum_pnl, 0) as today_cum_pnl
+        FROM daily_cum
+        WHERE date = CURRENT_DATE
+      ),
+
+      /* ---------------- OVERALL PNL ---------------- */
+      overall_pnl AS (
+        SELECT strategy_id,
+               (ARRAY_AGG(cum_pnl::NUMERIC ORDER BY timestamp DESC))[1] as overall_cum_pnl
+        FROM paper_trades
+        WHERE event_type = 'EXIT'
+        GROUP BY strategy_id
+      )
+
+      SELECT 
+        ud.strategy_id,
+        ud.strategy_name,
+
+        COUNT(*) as total_deployments,
+
+        JSON_AGG(
+          JSON_BUILD_OBJECT(
+            'id', ud.id,
+            'type', ud.type,
+            'multiplier', ud.multiplier,
+            'deployed_at', ud.deployed_at,
+
+            /* 🔥 DEPLOYMENT DAY PNL */
+            'pnl', COALESCE(dp.day_pnl, 0)
+          )
+          ORDER BY ud.deployed_at DESC
+        ) as deployments,
+
+        COALESCE(tp.today_cum_pnl, 0) as today_cumulative_pnl,
+        COALESCE(op.overall_cum_pnl, 0) as overall_cumulative_pnl
+
+      FROM user_deployments ud
+
+      LEFT JOIN daily_pnl dp 
+        ON ud.strategy_id = dp.strategy_id 
+        AND ud.deploy_date = dp.date
+
+      LEFT JOIN today_pnl tp ON ud.strategy_id = tp.strategy_id
+      LEFT JOIN overall_pnl op ON ud.strategy_id = op.strategy_id
+
+      GROUP BY 
+        ud.strategy_id, 
+        ud.strategy_name,
+        tp.today_cum_pnl,
+        op.overall_cum_pnl
+
+      ORDER BY ud.strategy_name;
+      `,
+      [user_id]
+    );
+
+    res.json({
+      success: true,
+      data: result.rows
+    });
+
+  } catch (err) {
+    console.error("Grouped Deployment PnL Error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch grouped deployments"
+    });
+  }
+};

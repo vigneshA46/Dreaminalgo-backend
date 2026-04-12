@@ -22,6 +22,8 @@ router.post(
 );
 
 router.post("/alice/session", authenticate, brokerController.aliceSession);
+router.post("/upstox/callback", authenticate, brokerController.upstoxCallback);
+router.post("/upstox/session", authenticate, brokerController.upstoxSession);
 
 /*
   GET USER BROKERS

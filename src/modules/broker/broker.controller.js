@@ -21,7 +21,7 @@ export const connectBroker = async (req, res) => {
     }
 
     // Validate broker connection
-    if (normalizedBroker !== "aliceblue") {
+    if (normalizedBroker !== "aliceblue" && normalizedBroker !== "upstox") {
   validation = await validateBrokerConnection(
     normalizedBroker,
     credentials
@@ -165,8 +165,38 @@ export const connectBroker = async (req, res) => {
     message: "aliceblue added successfully",
     broker: result.rows[0]
   });
-}
+    }
+    else if (normalizedBroker === "upstox") {
 
+  const brokerData = {
+    apiKey: credentials.apiKey,
+    apiSecret: credentials.apiSecret,
+    redirectUri: credentials.redirectUri,
+    code: "",
+    accessToken: ""
+  };
+
+  const result = await pool.query(
+    `
+    INSERT INTO broker_accounts
+    (user_id, broker_name, credentials, status, client_id)
+    VALUES ($1,$2,$3,$4,$5)
+    RETURNING *
+    `,
+    [
+      userId,
+      normalizedBroker,
+      brokerData,
+      "connected",   // IMPORTANT 
+      "NA"
+    ]
+  );
+
+  return res.status(201).json({
+    message: "upstox added successfully",
+    broker: result.rows[0]
+  });
+}
   } catch (error) {
 
     console.error("Connect Broker Error:", error);
@@ -175,6 +205,8 @@ export const connectBroker = async (req, res) => {
   }
 
 };
+
+
 /*
   GET ALL USER BROKERS
 */
@@ -481,5 +513,106 @@ export const aliceSession = async (req, res) => {
     return res.status(500).json({
       error: "Session generation failed"
     });
+  }
+};
+
+export const upstoxCallback = async (req, res) => {
+  try {
+    const { code, state } = req.query;
+
+    // get broker id (preferred from state OR localStorage fallback)
+    const brokerId = state || req.query.brokerId;
+
+    if (!brokerId) {
+      return res.status(400).json({ error: "Missing brokerId" });
+    }
+
+    const brokerRes = await pool.query(
+      `SELECT * FROM broker_accounts WHERE id = $1`,
+      [brokerId]
+    );
+
+    const broker = brokerRes.rows[0];
+
+    if (!broker) {
+      return res.status(404).json({ error: "Broker not found" });
+    }
+
+    const { apiKey, apiSecret, redirectUri } = broker.credentials;
+
+    const response = await axios.post(
+      "https://api.upstox.com/v2/login/authorization/token",
+      new URLSearchParams({
+        code,
+        client_id: apiKey,
+        client_secret: apiSecret,
+        redirect_uri: redirectUri,
+        grant_type: "authorization_code"
+      }),
+      {
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded"
+        }
+      }
+    );
+
+    const data = response.data;
+
+    // update DB
+    await pool.query(
+      `
+      UPDATE broker_accounts
+      SET credentials = credentials || $1::jsonb,
+          status = 'connected'
+      WHERE id = $2
+      `,
+      [
+        {
+          accessToken: data.access_token,
+          refreshToken: data.refresh_token || null
+        },
+        brokerId
+      ]
+    );
+
+    return res.redirect("http://localhost:5173/brokers");
+
+  } catch (err) {
+    console.error(err.response?.data || err.message);
+    return res.status(500).json({ error: "Upstox callback failed" });
+  }
+};
+
+
+export const upstoxSession = async (req, res) => {
+  try {
+    const { code, apiKey, apiSecret, redirectUri } = req.body;
+
+    const response = await axios.post(
+      "https://api.upstox.com/v2/login/authorization/token",
+      new URLSearchParams({
+        code,
+        client_id: apiKey,
+        client_secret: apiSecret,
+        redirect_uri: redirectUri,
+        grant_type: "authorization_code"
+      }),
+      {
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded"
+        }
+      }
+    );
+
+    const data = response.data;
+
+    return res.json({
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token || null
+    });
+
+  } catch (err) {
+    console.error(err.response?.data || err.message);
+    return res.status(500).json({ error: "Upstox session failed" });
   }
 };
