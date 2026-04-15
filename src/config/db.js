@@ -107,10 +107,9 @@ export const initDB = async () => {
   UNIQUE(user_id, broker_name, client_id)
   );
   `)
-
-      await pool.query(
-        `
-      CREATE TABLE IF NOT EXISTS strategies (
+await pool.query(
+  `
+  CREATE TABLE IF NOT EXISTS strategies (
       id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
 
       name VARCHAR(255) NOT NULL,
@@ -127,11 +126,13 @@ export const initDB = async () => {
 
       is_paid BOOLEAN DEFAULT false,
 
+      starting_time TIME,  -- ✅ only time (HH:MM:SS)
+
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   );
-        `
-      )
+  `
+);
 
       await pool.query(`
         CREATE TABLE IF NOT EXISTS strategy_subscriptions (
@@ -325,6 +326,8 @@ CREATE TABLE IF NOT EXISTS real_trades (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
       `)
+
+
 
 
 

@@ -216,7 +216,7 @@ export const getUserBrokers = async (req, res) => {
 
     const result = await pool.query(
       `
-      SELECT id, broker_name, client_id, status, token_expires_at, created_at, credentials
+      SELECT id, broker_name, client_id, status, token_expires_at, created_at, credentials, updated_at
       FROM broker_accounts
       WHERE user_id = $1
       ORDER BY created_at DESC
