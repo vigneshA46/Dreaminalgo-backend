@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import morgan from 'morgan';
 
+
 import authRoutes from './src/modules/auth/auth.routes.js';
 import authAdmin from './src/modules/admin-auth/admin.auth.routes.js';
 import adminRoutes from './src/modules/admin/admin.routes.js';
@@ -79,7 +80,7 @@ app.use('/api/deployments',deploymentroutes);
 app.use('/api/realtrades',realtraderoutes);
 app.use('/api/tutorials',tutorialroutes);
 app.use("/api/", telemetryRoute);
-
+  
 /* Health Check */
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', timestamp: new Date() });

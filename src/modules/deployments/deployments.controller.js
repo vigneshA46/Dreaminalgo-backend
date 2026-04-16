@@ -1,5 +1,6 @@
 import pool from "../../config/db.js";
 
+
 const IST_OFFSET = 5.5 * 60 * 60 * 1000;
 
 function getISTStartEndOfDay() {
@@ -76,7 +77,6 @@ export const createDeployment = async (req, res) => {
     client.release();
   }
 };
-
 
 export const getTodayDeploymentsByStrategy = async (req, res) => {
   try {
@@ -352,5 +352,84 @@ export const getUserDeploymentsGroupedWithPnl = async (req, res) => {
       success: false,
       message: "Failed to fetch grouped deployments"
     });
+  }
+};
+
+
+export const getTodayDeploymentsGroupedByStrategy = async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        s.id as strategy_id,
+        s.name as strategy_name,
+
+        COUNT(d.id) as total_deployments,
+
+        COUNT(*) FILTER (WHERE d.type = 'LIVE') as live_count,
+        COUNT(*) FILTER (WHERE d.type = 'PAPER') as paper_count,
+
+        JSON_AGG(
+          JSON_BUILD_OBJECT(
+            'deployment_id', d.id,
+            'type', d.type,
+            'multiplier', d.multiplier,
+            'deployed_at', d.deployed_at,
+
+            'user', JSON_BUILD_OBJECT(
+              'id', u.id,
+              'fullname', u.fullname,
+              'email', u.email,
+              'mobile_number', u.mobile_number
+            )
+          )
+          ORDER BY d.deployed_at DESC
+        ) FILTER (WHERE d.id IS NOT NULL) as deployments
+
+      FROM strategies s
+
+      LEFT JOIN deployments d 
+        ON d.strategy_id = s.id
+        AND d.deployed_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
+            BETWEEN date_trunc('day', now() AT TIME ZONE 'Asia/Kolkata')
+            AND date_trunc('day', now() AT TIME ZONE 'Asia/Kolkata') + interval '1 day' - interval '1 second'
+
+      LEFT JOIN users u ON d.user_id = u.id
+
+      GROUP BY s.id, s.name
+      ORDER BY s.name;
+    `);
+
+    res.json({
+      success: true,
+      data: result.rows
+    });
+
+  } catch (err) {
+    console.error("Today grouped deployments error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch today's deployments"
+    });
+  }
+};
+
+
+export const getTodayDeploymentsByType = async (req, res) => {
+  try {
+    const { start, end } = getISTStartEndOfDay();
+
+    const result = await pool.query(
+      `SELECT d.*, b.broker_name, b.credentials
+       FROM deployments d
+       LEFT JOIN broker_accounts b
+       ON d.broker_account_id = b.id
+       WHERE d.deployed_at BETWEEN $1 AND $2`,
+      [start, end]
+    );
+
+    res.json(result.rows);
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 };
