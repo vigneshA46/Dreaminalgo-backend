@@ -1,71 +1,67 @@
 import axios from "axios";
-import { generateSync } from "otplib";
-
 
 export default async function validateDhan(credentials) {
-
   try {
+    const { clientId, access_token } = credentials;
 
-    const { clientId, pin, totp } = credentials;
-    
-    console.log(clientId , pin , totp)
-    const secret = totp
-
-    const totpin = generateSync({secret});
-
-
+    console.log(clientId, access_token);
 
     // Basic validation
-    if (!clientId || !pin || !totp) {
+    if (!clientId || !access_token) {
       return {
         success: false,
         message: "Missing Dhan credentials",
       };
     }
 
-    // API call
-    const url = "https://auth.dhan.co/app/generateAccessToken";
+    // 🔥 Profile API (validation endpoint)
+    const url = "https://api.dhan.co/v2/profile";
 
-    const response = await axios.post(url, null, {
-      params: {
-        dhanClientId: clientId,
-        pin: pin,
-        totp: totpin,
-      },
+    const response = await axios.get(url, {
       headers: {
+        "access-token": access_token,
         "Content-Type": "application/json",
       },
     });
 
-    const data =await response.data;
-    await console.log(data)
-    
+    const data = response.data;
+    console.log(data);
 
-    if (!data) {
+    // Validate response
+    if (!data || !data.dhanClientId) {
       return {
         success: false,
-        message: "Failed to generate Dhan access token"
+        message: "Invalid Dhan access token",
+      };
+    }
+
+    // Optional: extra safety check
+    if (clientId !== data.dhanClientId) {
+      return {
+        success: false,
+        message: "Client ID mismatch",
       };
     }
 
     // ✅ STANDARDIZED RESPONSE
     return {
-  success: true,
-  message: "Dhan connected successfully",
-  data: {
-    clientId: data.dhanClientId,
-    accessToken: data.accessToken,
-    expiryTime: data.expiryTime
-  }
-};
+      success: true,
+      message: "Dhan connected successfully",
+      data: {
+        clientId: data.dhanClientId,
+        accessToken: access_token,
+        tokenValidity: data.tokenValidity,
+      },
+    };
 
   } catch (error) {
+    console.error(error?.response?.data || error.message);
 
     return {
       success: false,
-      message: error
+      message:
+        error?.response?.data?.message ||
+        "Failed to validate Dhan credentials",
     };
-
   }
-
 }
