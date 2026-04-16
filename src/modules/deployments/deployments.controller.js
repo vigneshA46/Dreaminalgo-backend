@@ -77,12 +77,9 @@ export const createDeployment = async (req, res) => {
     client.release();
   }
 };
-
 export const getTodayDeploymentsByStrategy = async (req, res) => {
   try {
     const { strategy_id } = req.params;
-
-    const { start, end } = getISTStartEndOfDay();
 
     const result = await pool.query(
       `SELECT d.*, b.broker_name, b.credentials
@@ -90,8 +87,10 @@ export const getTodayDeploymentsByStrategy = async (req, res) => {
        LEFT JOIN broker_accounts b
        ON d.broker_account_id = b.id
        WHERE d.strategy_id = $1
-       AND d.deployed_at BETWEEN $2 AND $3`,
-      [strategy_id, start, end]
+       AND d.deployed_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
+           BETWEEN date_trunc('day', now() AT TIME ZONE 'Asia/Kolkata')
+           AND date_trunc('day', now() AT TIME ZONE 'Asia/Kolkata') + interval '1 day' - interval '1 second'`,
+      [strategy_id]
     );
 
     res.json(result.rows);
@@ -100,7 +99,6 @@ export const getTodayDeploymentsByStrategy = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
-
 
 export const getTodayDeploymentsByStrategyAndType = async (req, res) => {
   try {
