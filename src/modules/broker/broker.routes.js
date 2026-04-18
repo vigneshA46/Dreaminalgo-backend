@@ -21,6 +21,8 @@ router.post(
   brokerController.aliceCallback
 );
 
+router.get("/flattrade/callback", authenticate, brokerController.flattradeCallback);
+
 router.post("/alice/session", authenticate, brokerController.aliceSession);
 router.post("/upstox/callback", authenticate, brokerController.upstoxCallback);
 router.post("/upstox/session", authenticate, brokerController.upstoxSession);

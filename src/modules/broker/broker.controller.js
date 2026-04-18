@@ -196,6 +196,38 @@ export const connectBroker = async (req, res) => {
     message: "upstox added successfully",
     broker: result.rows[0]
   });
+    }
+    else if (normalizedBroker === "flattrade") {
+
+  const brokerData = {
+    apiKey: credentials.apiKey,
+    apiSecret: credentials.apiSecret,
+    redirectUri: credentials.redirectUri,
+    requestCode: "",
+    accessToken: "",
+    clientId: ""
+  };
+
+  const result = await pool.query(
+    `
+    INSERT INTO broker_accounts
+    (user_id, broker_name, credentials, status, client_id)
+    VALUES ($1,$2,$3,$4,$5)
+    RETURNING *
+    `,
+    [
+      userId,
+      normalizedBroker,
+      brokerData,
+      "pending",   // ⛔ IMPORTANT (not connected yet)
+      "NA"
+    ]
+  );
+
+  return res.status(201).json({
+    message: "flattrade added successfully",
+    broker: result.rows[0]
+  });
 }
   } catch (error) {
 
@@ -614,5 +646,87 @@ export const upstoxSession = async (req, res) => {
   } catch (err) {
     console.error(err.response?.data || err.message);
     return res.status(500).json({ error: "Upstox session failed" });
+  }
+};
+
+
+export const flattradeCallback = async (req, res) => {
+  try {
+    const { request_code, state } = req.query;
+
+    const brokerId = state;
+
+    if (!request_code || !brokerId) {
+
+      return res.status(400).json({ error: "Missing request_code or brokerId" });
+    }
+
+    // 🔍 Get broker from DB
+    const brokerRes = await pool.query(
+      `SELECT * FROM broker_accounts WHERE id = $1`,
+      [brokerId]
+    );
+
+    const broker = brokerRes.rows[0];
+
+    if (!broker) {
+      return res.status(404).json({ error: "Broker not found" });
+    }
+
+    const { apiKey, apiSecret } = broker.credentials;
+
+    // 🔐 SHA256(apiKey + request_code + apiSecret)
+    const crypto = await import("crypto");
+
+    const hash = crypto
+      .createHash("sha256")
+      .update(apiKey + request_code + apiSecret)
+      .digest("hex");
+
+    // 🔁 Exchange token
+    const response = await axios.post(
+      "https://authapi.flattrade.in/trade/apitoken",
+      {
+        api_key: apiKey,
+        request_code,
+        api_secret: hash
+      }
+    );
+    console.log(response)
+
+    const data = response.data;
+
+
+    if (data.status !== "Ok") {
+      return res.status(400).json({
+        error: data.emsg || "FlatTrade auth failed"
+      });
+    }
+
+    // ✅ Update DB
+    await pool.query(
+      `
+      UPDATE broker_accounts
+      SET credentials = credentials || $1::jsonb,
+          status = 'connected'
+      WHERE id = $2
+      `,
+      [
+        {
+          accessToken: data.token,
+          clientId: data.client
+        },
+        brokerId
+      ]
+    );
+
+    return res.redirect("http://localhost:5173/brokers");
+
+  } catch (err) {
+    console.error("FlatTrade Callback Error:", err.response?.data || err.message);
+
+    return res.status(500).json({
+      error: "FlatTrade connection failed"
+    });
   }
 };

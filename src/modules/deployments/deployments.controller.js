@@ -87,6 +87,7 @@ export const getTodayDeploymentsByStrategy = async (req, res) => {
        LEFT JOIN broker_accounts b
        ON d.broker_account_id = b.id
        WHERE d.strategy_id = $1
+       AND d.status = 'ACTIVE'
        AND d.deployed_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
            BETWEEN date_trunc('day', now() AT TIME ZONE 'Asia/Kolkata')
            AND date_trunc('day', now() AT TIME ZONE 'Asia/Kolkata') + interval '1 day' - interval '1 second'`,

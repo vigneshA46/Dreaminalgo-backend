@@ -318,6 +318,36 @@ CREATE TABLE IF NOT EXISTS real_trades (
 );
 `);
 
+await pool.query(`
+CREATE TABLE IF NOT EXISTS real_trade_groups (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+
+  user_id BIGINT,
+  strategy_id BIGINT,
+  broker_id BIGINT,
+
+  trade_id UUID,              -- 🔥 links ENTRY & EXIT
+
+  trade_date DATE,
+  timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+  event_type VARCHAR(20),     -- ENTRY / EXIT
+  leg_name VARCHAR(100),
+
+  symbol VARCHAR(50),
+  side VARCHAR(10),           -- BUY / SELL
+
+  quantity INTEGER,
+  price NUMERIC,
+
+  reason TEXT,
+
+  pnl NUMERIC(12,2),
+  cum_pnl NUMERIC(12,2),
+
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+`);
      await pool.query(`
       CREATE TABLE IF NOT EXISTS tutorials (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

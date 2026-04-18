@@ -16,10 +16,13 @@ export const validateBrokerConnection = async (brokerName, credentials) => {
       return await validateAngel(credentials);
 
     case "aliceblue":
-      return 
+      return { success: true };
    
     case "zebumynt":
       return await validateZebu(credentials);
+
+    case "flattrade":
+      return { success: true };
 
     default:
       return {
