@@ -114,18 +114,20 @@ GET ALL DATES BY STRATEGY
 */
 
 
-
 export const getDatesByStrategy = async (req, res) => {
   try {
-
     const { strategy_id } = req.params;
 
     const result = await pool.query(
       `
-  SELECT DISTINCT TO_CHAR(date, 'YYYY-MM-DD') as date
-  FROM trade_legs
-  WHERE startergy_id = $1
-  ORDER BY date DESC
+      SELECT 
+        TO_CHAR(DATE(timestamp), 'YYYY-MM-DD') as date,
+        COALESCE(SUM(CAST(pnl AS NUMERIC)), 0) as total_pnl
+      FROM paper_trades
+      WHERE strategy_id = $1
+      AND event_type = 'EXIT'
+      GROUP BY DATE(timestamp)
+      ORDER BY DATE(timestamp) DESC
       `,
       [strategy_id]
     );
@@ -133,20 +135,18 @@ export const getDatesByStrategy = async (req, res) => {
     res.json({
       success: true,
       count: result.rowCount,
-      dates: result.rows.map(row => row.date)
+      data: result.rows   // [{ date, total_pnl }]
     });
 
   } catch (error) {
-
     console.error(error);
 
     res.status(500).json({
       success: false,
-      message: "Failed to fetch dates"
+      message: "Failed to fetch dates with pnl"
     });
   }
 };
-
 
 
 export const updateLegPnl = async (req, res) => {
