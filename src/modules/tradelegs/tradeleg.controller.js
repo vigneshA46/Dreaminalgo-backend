@@ -113,7 +113,6 @@ GET ALL DATES BY STRATEGY
 -----------------------------------------
 */
 
-
 export const getDatesByStrategy = async (req, res) => {
   try {
     const { strategy_id } = req.params;
@@ -121,13 +120,19 @@ export const getDatesByStrategy = async (req, res) => {
     const result = await pool.query(
       `
       SELECT 
-        TO_CHAR(DATE(timestamp), 'YYYY-MM-DD') as date,
-        COALESCE(SUM(CAST(pnl AS NUMERIC)), 0) as total_pnl
-      FROM paper_trades
-      WHERE strategy_id = $1
-      AND event_type = 'EXIT'
-      GROUP BY DATE(timestamp)
-      ORDER BY DATE(timestamp) DESC
+        TO_CHAR(date, 'YYYY-MM-DD') as date,
+        COALESCE(CAST(cum_pnl AS NUMERIC), 0) as total_pnl
+      FROM (
+        SELECT DISTINCT ON (DATE(timestamp))
+          DATE(timestamp) as date,
+          cum_pnl,
+          timestamp
+        FROM paper_trades
+        WHERE strategy_id = $1
+        AND event_type = 'EXIT'
+        ORDER BY DATE(timestamp), timestamp DESC   -- 🔥 latest per day
+      ) t
+      ORDER BY date DESC
       `,
       [strategy_id]
     );
@@ -135,7 +140,7 @@ export const getDatesByStrategy = async (req, res) => {
     res.json({
       success: true,
       count: result.rowCount,
-      data: result.rows   // [{ date, total_pnl }]
+      data: result.rows
     });
 
   } catch (error) {
@@ -147,7 +152,6 @@ export const getDatesByStrategy = async (req, res) => {
     });
   }
 };
-
 
 export const updateLegPnl = async (req, res) => {
   try {
