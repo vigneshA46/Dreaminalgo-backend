@@ -82,7 +82,7 @@ export const getTodayDeploymentsByStrategy = async (req, res) => {
     const { strategy_id } = req.params;
 
     const result = await pool.query(
-      `SELECT d.*, b.broker_name, b.credentials
+      `SELECT d.*, b.broker_name, b.credentials , b.id
        FROM deployments d
        LEFT JOIN broker_accounts b
        ON d.broker_account_id = b.id
