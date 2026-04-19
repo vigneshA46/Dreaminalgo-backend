@@ -107,6 +107,8 @@ export const initDB = async () => {
   UNIQUE(user_id, broker_name, client_id)
   );
   `)
+
+  
 await pool.query(
   `
   CREATE TABLE IF NOT EXISTS strategies (
