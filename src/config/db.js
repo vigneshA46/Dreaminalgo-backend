@@ -318,13 +318,14 @@ CREATE TABLE IF NOT EXISTS real_trades (
 );
 `);
 
+
 await pool.query(`
 CREATE TABLE IF NOT EXISTS real_trade_groups (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
 
-  user_id BIGINT,
-  strategy_id BIGINT,
-  broker_id BIGINT,
+  user_id TEXT,
+  strategy_id TEXT,
+  broker_id TEXT,
 
   trade_id UUID,              -- 🔥 links ENTRY & EXIT
 
@@ -348,6 +349,8 @@ CREATE TABLE IF NOT EXISTS real_trade_groups (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 `);
+
+
      await pool.query(`
       CREATE TABLE IF NOT EXISTS tutorials (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

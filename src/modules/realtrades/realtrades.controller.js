@@ -121,3 +121,42 @@ export const getTrades = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
+
+export const getOpenTrades = async (req, res) => {
+  try {
+    const { user_id, strategy_id, broker_id, date } = req.query;
+
+    const result = await pool.query(
+      `
+      SELECT *
+      FROM real_trade_groups t1
+      WHERE t1.user_id = $1
+        AND t1.strategy_id = $2
+        AND t1.broker_id = $3
+        AND t1.trade_date = $4
+        AND t1.event_type = 'ENTRY'
+        AND NOT EXISTS (
+          SELECT 1
+          FROM real_trade_groups t2
+          WHERE t2.user_id = t1.user_id
+            AND t2.strategy_id = t1.strategy_id
+            AND t2.broker_id = t1.broker_id
+            AND t2.trade_date = t1.trade_date
+            AND t2.symbol = t1.symbol
+            AND t2.leg_name = t1.leg_name
+            AND t2.event_type = 'EXIT'
+            AND t2.timestamp > t1.timestamp
+        )
+      ORDER BY t1.timestamp DESC
+      `,
+      [user_id, strategy_id, broker_id, date]
+    );
+
+    res.json(result.rows);
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch open trades" });
+  }
+};

@@ -13,5 +13,6 @@ router.post("/create", realTradesController.createTrade);
 
 // GET TRADES WITH FILTERS
 router.get("/",authenticate ,realTradesController.getTrades);
+router.get("/opentrades",authenticate ,realTradesController.getOpenTrades);
 
 export default router;

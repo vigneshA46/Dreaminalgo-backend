@@ -20,4 +20,6 @@ router.get("/", controller.getTrades);
 */
 router.get("/latest", controller.getLatestTrade);
 
+router.get("/opentrades", controller.getOpenTrades);
+
 export default router;

@@ -24,6 +24,7 @@ router.get("/user/today", authenticate, controller.getUsertodayDeployment);
 
 // Get all user deployments
 router.get("/user/all", authenticate, controller.getUserDeployments);
+router.patch("/user/status", controller.updateDeploymentStatusByDate);
 
 // Get deployments by date
 router.get("/by-date", authenticate, controller.getDeploymentsByDate);

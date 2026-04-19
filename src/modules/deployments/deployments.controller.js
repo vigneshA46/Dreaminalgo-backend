@@ -432,3 +432,52 @@ export const getTodayDeploymentsByType = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+
+export const updateDeploymentStatusByDate = async (req, res) => {
+  try {
+    const { strategy_id, broker_account_id, date, status , user_id } = req.body;
+
+    if (!date || !status) {
+      return res.status(400).json({
+        success: false,
+        message: "date and status are required"
+      });
+    }
+
+    const result = await pool.query(
+      `
+      UPDATE deployments
+      SET status = $5
+      WHERE user_id = $1
+      AND strategy_id = $2
+      AND (
+        broker_account_id = $3 
+        OR ($3 IS NULL AND broker_account_id IS NULL)
+      )
+      AND DATE(created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata') = $4
+      RETURNING *;
+      `,
+      [user_id, strategy_id, broker_account_id || null, date, status]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "No matching deployment found"
+      });
+    }
+
+    res.json({
+      success: true,
+      updated: result.rows
+    });
+
+  } catch (err) {
+    console.error("Update deployment status error:", err);
+    res.status(500).json({
+      success: false,
+      message: err.message
+    });
+  }
+};
