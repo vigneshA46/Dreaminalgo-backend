@@ -120,19 +120,26 @@ export const getDatesByStrategy = async (req, res) => {
     const result = await pool.query(
       `
       SELECT 
-        TO_CHAR(date, 'YYYY-MM-DD') as date,
-        COALESCE(CAST(cum_pnl AS NUMERIC), 0) as total_pnl
-      FROM (
-        SELECT DISTINCT ON (DATE(timestamp))
-          DATE(timestamp) as date,
-          cum_pnl,
-          timestamp
-        FROM paper_trades
-        WHERE strategy_id = $1
-        AND event_type = 'EXIT'
-        ORDER BY DATE(timestamp), timestamp DESC   -- 🔥 latest per day
-      ) t
-      ORDER BY date DESC
+  TO_CHAR(d.date, 'YYYY-MM-DD') as date,
+  COALESCE(e.cum_pnl::NUMERIC, 0) as total_pnl
+FROM (
+  -- Step 1: distinct dates
+  SELECT DISTINCT date
+  FROM trade_legs
+  WHERE startergy_id = $1
+) d
+LEFT JOIN (
+  -- Step 2: latest EXIT per day
+  SELECT DISTINCT ON (DATE(timestamp))
+    DATE(timestamp) as date,
+    cum_pnl
+  FROM paper_trades
+  WHERE strategy_id = $1::uuid
+  AND event_type = 'EXIT'
+  ORDER BY DATE(timestamp), timestamp DESC
+) e
+ON d.date = e.date
+ORDER BY d.date DESC;
       `,
       [strategy_id]
     );
