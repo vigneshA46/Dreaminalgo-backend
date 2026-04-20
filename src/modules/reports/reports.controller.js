@@ -75,7 +75,7 @@ const result = await pool.query(
 export const getStrategyDatewisePnl = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { strategy_id } = req.body;
+    const { strategy_id } = req.params;
 
     if (!userId || !strategy_id) {
       return res.status(400).json({
