@@ -127,7 +127,7 @@ FROM (
   SELECT DISTINCT date
   FROM trade_legs
   WHERE startergy_id = $1
-) d
+) d 
 LEFT JOIN (
   -- Step 2: latest EXIT per day
   SELECT DISTINCT ON (DATE(timestamp))

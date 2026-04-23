@@ -62,3 +62,33 @@ export const changePassword = async (req, res) => {
     });
   }
 };
+
+export const changePasswordAdmin = async (req, res) => {
+  try {
+
+    const { userId , password } = req.body;
+
+    if (!password) {
+      return res.status(400).json({
+        success: false,
+        message: "Password is required"
+      });
+    }
+
+    const result = await authService.changePasswordService(userId, password);
+
+    res.json({
+      success: true,
+      ...result
+    });
+
+  } catch (error) {
+
+    console.error("Change Password Error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message || "Failed to change password"
+    });
+  }
+};

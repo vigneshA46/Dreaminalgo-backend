@@ -120,6 +120,8 @@ await pool.query(
       created_by UUID REFERENCES users(id),
       is_admin_strategy BOOLEAN DEFAULT false,
 
+      state_id TEXT,
+
       capital_required NUMERIC,
       tokens_required INTEGER DEFAULT 1,
 

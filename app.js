@@ -22,6 +22,7 @@ import realtraderoutes from "./src/modules/realtrades/realtrades.routes.js"
 import realtragroupderoutes from "./src/modules/realtradegroups/realTradeGroups.routes.js"
 import tutorialroutes from "./src/modules/tutorials/tutorials.routes.js"
 import reportsroutes from "./src/modules/reports/reports.routes.js"
+//#import './src/modules/jobs/deploymentCron.js'
 
 const app = express();
 
@@ -34,6 +35,11 @@ app.set("trust proxy", 1);
 if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
+
+/* setTimeout(() => {
+  console.log("Running startup deployment sync...");
+}, 5000);
+ */
 
 /* CORS */
 const allowedOrigins = [
@@ -84,7 +90,8 @@ app.use('/api/realtradegroups',realtragroupderoutes);
 app.use('/api/tutorials',tutorialroutes);
 app.use('/api/reports',reportsroutes);
 app.use("/api/", telemetryRoute);
-  
+
+
 /* Health Check */
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', timestamp: new Date() });

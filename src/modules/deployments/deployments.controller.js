@@ -52,10 +52,10 @@ export const createDeployment = async (req, res) => {
 
     // ✅ Insert deployment
     const result = await client.query(
-      `INSERT INTO deployments (user_id, strategy_id, type, broker_account_id , multiplier)
-       VALUES ($1, $2, $3, $4 , $5)
+      `INSERT INTO deployments (user_id, strategy_id, type, broker_account_id , multiplier , status)
+       VALUES ($1, $2, $3, $4 , $5 , "ACTIVE")
        RETURNING *`,
-      [user_id, strategy_id, type, broker_account_id || null , multiplier]
+      [user_id, strategy_id, type, broker_account_id || null , multiplier ]
     );
 
     await client.query("COMMIT");
@@ -77,6 +77,7 @@ export const createDeployment = async (req, res) => {
     client.release();
   }
 };
+
 export const getTodayDeploymentsByStrategy = async (req, res) => {
   try {
     const { strategy_id } = req.params;
@@ -480,4 +481,21 @@ export const updateDeploymentStatusByDate = async (req, res) => {
       message: err.message
     });
   }
+};
+
+
+export const stopDeployment = async (req, res) => {
+  const { strategy_id, broker_account_id } = req.body;
+  const user_id = req.user.id;
+
+  await pool.query(
+    `UPDATE deployments
+     SET status = 'STOPPED'
+     WHERE user_id = $1
+     AND strategy_id = $2
+     AND broker_account_id IS NOT DISTINCT FROM $3`,
+    [user_id, strategy_id, broker_account_id || null]
+  );
+
+  res.json({ success: true });
 };
