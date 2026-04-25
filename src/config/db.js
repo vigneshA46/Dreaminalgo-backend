@@ -354,6 +354,29 @@ CREATE TABLE IF NOT EXISTS real_trade_groups (
 );
 `);
 
+await pool.query(`
+  CREATE TABLE IF NOT EXISTS coupons (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  code VARCHAR(50) UNIQUE NOT NULL,
+  free_tokens INTEGER NOT NULL,
+  max_uses INTEGER DEFAULT 1, -- total allowed uses
+  used_count INTEGER DEFAULT 0,
+  is_active BOOLEAN DEFAULT true,
+  expires_at TIMESTAMP,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+  `)
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS coupon_redemptions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  coupon_id UUID REFERENCES coupons(id) ON DELETE CASCADE,
+  redeemed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(user_id, coupon_id) -- prevents reuse by same user
+);
+    `)
+
 
      await pool.query(`
       CREATE TABLE IF NOT EXISTS tutorials (

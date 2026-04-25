@@ -22,6 +22,7 @@ import realtraderoutes from "./src/modules/realtrades/realtrades.routes.js"
 import realtragroupderoutes from "./src/modules/realtradegroups/realTradeGroups.routes.js"
 import tutorialroutes from "./src/modules/tutorials/tutorials.routes.js"
 import reportsroutes from "./src/modules/reports/reports.routes.js"
+import couponroutes from "./src/modules/coupons/coupons.routes.js"
 //#import './src/modules/jobs/deploymentCron.js'
 
 const app = express();
@@ -89,6 +90,7 @@ app.use('/api/realtrades',realtraderoutes);
 app.use('/api/realtradegroups',realtragroupderoutes);
 app.use('/api/tutorials',tutorialroutes);
 app.use('/api/reports',reportsroutes);
+app.use('/api/coupons',couponroutes);
 app.use("/api/", telemetryRoute);
 
 
