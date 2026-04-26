@@ -193,8 +193,6 @@ export const updateLegPnl = async (req, res) => {
   }
 };
 
-
-
 export const getStrategyDetailedPnl = async (req, res) => {
   try {
 

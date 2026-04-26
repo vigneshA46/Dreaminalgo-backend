@@ -25,6 +25,7 @@ router.post("/create",authenticate, createStrategy);
 router.get("/admin",authenticate , authorize('superadmin'), getAdminStrategy);
 
 router.get("/:id",authenticate, getSingleStrategy);
+
 /* GET USER */
 router.get("/user",authenticate, getUserStrategy);
 
