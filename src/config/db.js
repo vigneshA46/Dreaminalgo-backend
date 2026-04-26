@@ -273,6 +273,8 @@ await pool.query(`
 
   multiplier INTEGER NOT NULL,
 
+  auto_deploy BOOLEAN DEFAULT true,
+
   deployed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -387,8 +389,33 @@ await pool.query(`
 );
       `)
 
+      await pool.query(
+        `
+       CREATE TABLE IF NOT EXISTS deployment_configs (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+
+  user_id UUID,
+  strategy_id UUID,
+  broker_account_id UUID,
+
+  type VARCHAR(20),
+  multiplier INTEGER,
+
+  auto_deploy BOOLEAN DEFAULT true,
+
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+); 
+        `
+      )
 
 
+await pool.query(
+  `
+  ALTER TABLE deployment_configs
+ADD CONSTRAINT unique_deployment_config
+UNIQUE (user_id, strategy_id, broker_account_id, type);
+  `
+)
 
 
     console.log("✅ Database connected & tables verified");

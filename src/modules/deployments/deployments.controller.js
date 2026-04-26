@@ -18,12 +18,11 @@ function getISTStartEndOfDay() {
     end: new Date(end.getTime() - IST_OFFSET)
   };
 }
-
 export const createDeployment = async (req, res) => {
   const client = await pool.connect();
 
   try {
-    const { strategy_id, type, broker_account_id ,multiplier} = req.body;
+    const { strategy_id, type, broker_account_id, multiplier } = req.body;
     const user_id = req.user.id;
 
     await client.query("BEGIN");
@@ -50,19 +49,41 @@ export const createDeployment = async (req, res) => {
       [user_id]
     );
 
-    // ✅ Insert deployment
+    /* -----------------------------------------
+       1. UPSERT DEPLOYMENT CONFIG
+    ----------------------------------------- */
+    await client.query(
+      `
+      INSERT INTO deployment_configs 
+        (user_id, strategy_id, broker_account_id, type, multiplier, auto_deploy)
+      VALUES ($1, $2, $3, $4, $5, true)
+
+      ON CONFLICT (user_id, strategy_id, broker_account_id, type)
+      DO UPDATE SET
+        multiplier = EXCLUDED.multiplier,
+        auto_deploy = true,
+        created_at = CURRENT_TIMESTAMP
+      `,
+      [user_id, strategy_id, broker_account_id || null, type, multiplier]
+    );
+
+    /* -----------------------------------------
+       2. INSERT TODAY DEPLOYMENT
+    ----------------------------------------- */
     const result = await client.query(
-      `INSERT INTO deployments (user_id, strategy_id, type, broker_account_id , multiplier)
-       VALUES ($1, $2, $3, $4 , $5)
-       RETURNING *`,
-      [user_id, strategy_id, type, broker_account_id || null , multiplier ]
+      `
+      INSERT INTO deployments 
+        (user_id, strategy_id, type, broker_account_id, multiplier, status)
+      VALUES ($1, $2, $3, $4, $5, 'ACTIVE')
+      RETURNING *
+      `,
+      [user_id, strategy_id, type, broker_account_id || null, multiplier]
     );
 
     await client.query("COMMIT");
 
     res.json({
       success: true,
-
       deployment: result.rows[0]
     });
 
@@ -125,7 +146,6 @@ export const getTodayDeploymentsByStrategyAndType = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
-
 
 export const getUserDeployments = async (req, res) => {
   try {
@@ -483,19 +503,52 @@ export const updateDeploymentStatusByDate = async (req, res) => {
   }
 };
 
-
 export const stopDeployment = async (req, res) => {
-  const { strategy_id, broker_account_id } = req.body;
-  const user_id = req.user.id;
+  const client = await pool.connect();
 
-  await pool.query(
-    `UPDATE deployments
-     SET status = 'STOPPED'
-     WHERE user_id = $1
-     AND strategy_id = $2
-     AND broker_account_id IS NOT DISTINCT FROM $3`,
-    [user_id, strategy_id, broker_account_id || null]
-  );
+  try {
+    const { strategy_id, broker_account_id } = req.body;
+    const user_id = req.user.id;
 
-  res.json({ success: true });
+    await client.query("BEGIN");
+
+    /* -----------------------------------------
+       1. STOP AUTO DEPLOY (FUTURE)
+    ----------------------------------------- */
+    await client.query(
+      `UPDATE deployment_configs
+       SET auto_deploy = false
+       WHERE user_id = $1
+       AND strategy_id = $2
+       AND broker_account_id IS NOT DISTINCT FROM $3`,
+      [user_id, strategy_id, broker_account_id || null]
+    );
+
+    /* -----------------------------------------
+       2. STOP TODAY'S DEPLOYMENT
+    ----------------------------------------- */
+    await client.query(
+      `UPDATE deployments
+       SET status = 'STOPPED'
+       WHERE user_id = $1
+       AND strategy_id = $2
+       AND broker_account_id IS NOT DISTINCT FROM $3
+       AND DATE(deployed_at AT TIME ZONE 'Asia/Kolkata') = CURRENT_DATE`,
+      [user_id, strategy_id, broker_account_id || null]
+    );
+
+    await client.query("COMMIT");
+
+    res.json({ success: true });
+
+  } catch (err) {
+    await client.query("ROLLBACK");
+
+    res.status(500).json({
+      success: false,
+      message: err.message
+    });
+  } finally {
+    client.release();
+  }
 };
