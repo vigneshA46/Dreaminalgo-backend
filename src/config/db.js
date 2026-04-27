@@ -409,13 +409,13 @@ await pool.query(`
       )
 
 
-await pool.query(
+/* await pool.query(
   `
   ALTER TABLE deployment_configs
 ADD CONSTRAINT unique_deployment_config
 UNIQUE (user_id, strategy_id, broker_account_id, type);
   `
-)
+) */
 
 
     console.log("✅ Database connected & tables verified");
