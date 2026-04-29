@@ -44,7 +44,7 @@ async (req, res) => {
 router.put(
 '/:id',
 authenticate,
-authorize('superadmin', 'courseadmin'),
+authorize('superadmin'),
 async (req, res) => {
   const user = await userService.updateUser(req.params.id, req.body);
   res.json(user);
