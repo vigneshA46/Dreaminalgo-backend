@@ -5,6 +5,13 @@ export const getStrategyStats = async (req, res) => {
   try {
     const { strategy_id } = req.query;
 
+    const strategyResult = await pool.query(
+  `SELECT * FROM strategies WHERE id = $1`,
+  [strategy_id]
+);
+
+  const strategy = strategyResult.rows[0] || null;
+
     /* -----------------------------------------
        1. DAY-WISE PNL (latest EXIT per day)
     ----------------------------------------- */
@@ -86,6 +93,7 @@ ORDER BY month DESC;
     ----------------------------------------- */
     res.json({
   success: true,
+  strategy,
   daily,
   monthly,
   summary: {
