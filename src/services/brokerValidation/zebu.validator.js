@@ -1,11 +1,11 @@
 import axios from "axios";
 import crypto from "crypto";
+import speakeasy from "speakeasy";
 
 export default async function validateZebu(credentials) {
   try {
     const { uid, password, apiKey, factor2 } = credentials;
 
-    // 🔴 Check missing fields
     if (!uid || !password || !apiKey || !factor2) {
       return {
         success: false,
@@ -18,7 +18,13 @@ export default async function validateZebu(credentials) {
       return crypto.createHash("sha256").update(data).digest("hex");
     };
 
-    // 🔐 Hashing (same as Python)
+    // 🔐 Generate TOTP from secret
+    const otp = speakeasy.totp({
+      secret: factor2,      // 🔑 your TOTP secret
+      encoding: "base32",   // ⚠️ usually base32
+    });
+
+    // 🔐 Hashing
     const pwdHash = sha256(password);
     const appKeyHash = sha256(`${uid}|${apiKey}`);
 
@@ -27,7 +33,7 @@ export default async function validateZebu(credentials) {
     const jData = {
       uid: uid,
       pwd: pwdHash,
-      factor2: factor2,
+      factor2: otp,  // ✅ USE GENERATED OTP
       apkversion: "1.0.0",
       imei: "12345678",
       vc: uid,
@@ -42,8 +48,6 @@ export default async function validateZebu(credentials) {
         "Content-Type": "application/x-www-form-urlencoded"
       }
     });
-
-    console.log(response.data)
 
     const data = response.data;
 
@@ -64,6 +68,8 @@ export default async function validateZebu(credentials) {
     };
 
   } catch (error) {
+    console.error(error.response?.data || error.message);
+
     return {
       success: false,
       message: "Invalid Zebu credentials"
