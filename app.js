@@ -24,6 +24,7 @@ import tutorialroutes from "./src/modules/tutorials/tutorials.routes.js"
 import reportsroutes from "./src/modules/reports/reports.routes.js"
 import couponroutes from "./src/modules/coupons/coupons.routes.js"
 import statisticsroutes from "./src/modules/statistics/statistics.routes.js"
+import notification from "./src/modules/notifications/notification.routes.js"
 //#import './src/modules/jobs/deploymentCron.js'
 
 const app = express();
@@ -93,6 +94,7 @@ app.use('/api/tutorials',tutorialroutes);
 app.use('/api/reports',reportsroutes);
 app.use('/api/coupons',couponroutes);
 app.use('/api/statistics',statisticsroutes);
+app.use('/api/notifications',notification);
 app.use("/api/", telemetryRoute);
 
 

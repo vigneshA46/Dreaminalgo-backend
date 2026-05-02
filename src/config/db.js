@@ -409,6 +409,37 @@ await pool.query(`
       )
 
 
+      await pool.query(
+        `
+        CREATE TABLE IF NOT EXISTS notifications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+
+    type VARCHAR(50) DEFAULT 'info', 
+    -- info, success, warning, error, announcement
+
+    created_by UUID, 
+    -- admin id (optional FK)
+
+    created_at TIMESTAMP DEFAULT NOW(),
+    starts_at TIMESTAMP DEFAULT NOW(),
+    expires_at TIMESTAMP, -- for your "valid 1 week" logic
+
+    is_active BOOLEAN DEFAULT TRUE,
+
+    -- Optional future-proof fields
+    target_type VARCHAR(50) DEFAULT 'all',
+    -- all / specific_users / premium / etc.
+
+    metadata JSONB DEFAULT '{}' 
+    -- for links, buttons, extra data
+);
+        `
+      )
+
+
 /* await pool.query(
   `
   ALTER TABLE deployment_configs
