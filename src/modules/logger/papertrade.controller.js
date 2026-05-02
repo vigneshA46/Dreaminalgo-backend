@@ -131,16 +131,16 @@ export const getEventsByDateTokenStrategy = async (req, res) => {
     const { date, token, strategy_id } = req.query;
 
     const result = await pool.query(
-      `
-      SELECT *
-      FROM paper_trades
-      WHERE DATE(timestamp) = $1
-      AND token = $2
-      AND strategy_id = $3
-      ORDER BY timestamp ASC
-      `,
-      [date, token, strategy_id]
-    );
+  `
+  SELECT *
+  FROM paper_trades
+  WHERE DATE(timestamp) = $1
+  AND token = $2
+  AND strategy_id = $3
+  ORDER BY timestamp ASC
+  `,
+  [date, token, strategy_id]
+);
 
     res.json({
       success: true,

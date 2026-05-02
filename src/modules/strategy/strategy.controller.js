@@ -3,40 +3,76 @@ import pool from "../../config/db.js";
 /*
   GET ALL STRATEGIES (User sees only ACTIVE)
 */
-
 export const getStrategies = async (req, res) => {
   try {
     const { search, paid } = req.query;
 
-    let query = `
-      SELECT *
-      FROM strategies
-      WHERE status = 'active'
+    let values = [];
+
+    let baseQuery = `
+      SELECT 
+        s.*,
+        tl.latest_date,
+        COALESCE(pt.cum_pnl, 0) AS latest_cum_pnl
+
+      FROM strategies s
+
+      LEFT JOIN (
+        SELECT 
+          startergy_id::uuid AS strategy_id,
+          MAX(date) AS latest_date
+        FROM trade_legs
+        GROUP BY startergy_id
+      ) tl ON tl.strategy_id = s.id
+
+      LEFT JOIN LATERAL (
+        SELECT 
+          CAST(cum_pnl AS NUMERIC) AS cum_pnl
+        FROM paper_trades
+        WHERE strategy_id::uuid = s.id
+          AND DATE(timestamp) = tl.latest_date
+          AND event_type = 'EXIT'
+        ORDER BY timestamp DESC
+        LIMIT 1
+      ) pt ON true
+
+      WHERE s.status = 'active'
     `;
 
-    const values = [];
-
+    // 🔍 filters
     if (search) {
       values.push(`%${search}%`);
-      query += ` AND name ILIKE $${values.length}`;
+      baseQuery += ` AND s.name ILIKE $${values.length}`;
     }
 
     if (paid !== undefined) {
       values.push(paid === "true");
-      query += ` AND is_paid = $${values.length}`;
+      baseQuery += ` AND s.is_paid = $${values.length}`;
     }
 
-    query += ` ORDER BY created_at DESC`;
+    // ✅ main data query
+    const dataQuery = baseQuery + ` ORDER BY s.created_at DESC`;
 
-    const result = await pool.query(query, values);
+    const result = await pool.query(dataQuery, values);
 
-    res.json(result.rows);
+    // ✅ overall pnl query (wrap the same query)
+    const overallQuery = `
+      SELECT COALESCE(SUM(latest_cum_pnl), 0) AS overall_pnl
+      FROM (${baseQuery}) AS sub
+    `;
+
+    const overallResult = await pool.query(overallQuery, values);
+
+    res.json({
+      strategies: result.rows,
+      overall_pnl: overallResult.rows[0].overall_pnl
+    });
+
   } catch (error) {
     console.error("Get Strategies Error:", error);
     res.status(500).json({ error: "Server error" });
   }
 };
-
 /*
   GET SINGLE STRATEGY
 */
