@@ -85,8 +85,6 @@ ORDER BY month DESC;
     const total_pnl = totalResult.rows[0]?.total_pnl || 0;
     const total_trades = totalResult.rows[0]?.total_trades || 0;
 
- 
-
 
     /* -----------------------------------------
        RESPONSE
