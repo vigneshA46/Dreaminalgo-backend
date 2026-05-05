@@ -258,6 +258,7 @@ await pool.query(`
       );
     `);
 
+    
   await pool.query(
     `CREATE TABLE IF NOT EXISTS deployments (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -407,8 +408,6 @@ await pool.query(`
 ); 
         `
       )
-
-
       await pool.query(
         `
         CREATE TABLE IF NOT EXISTS notifications (

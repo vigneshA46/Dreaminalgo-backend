@@ -13,6 +13,7 @@ router.post("/", authenticate, controller.createDeployment);
 // Get today deployments by strategy
 router.get("/today/:strategy_id", controller.getTodayDeploymentsByStrategy);
 
+
 // Get today deployments by strategy + type
 router.get(
   "/today/:strategy_id/:type",
@@ -33,6 +34,8 @@ router.get("/by-date", authenticate, controller.getDeploymentsByDate);
 router.get("/grouped/strategy", authenticate, controller.getDeploymentsGroupedByStrategy);
 
 router.get("/userdep/all", authenticate, controller.getUserDeploymentsGroupedWithPnl);
+
+router.post("/userdep/stopdep/:id", authenticate, controller.exitDeployment);
 
 
 export default router;

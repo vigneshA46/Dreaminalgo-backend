@@ -18,6 +18,7 @@ function getISTStartEndOfDay() {
     end: new Date(end.getTime() - IST_OFFSET)
   };
 }
+
 export const createDeployment = async (req, res) => {
   const client = await pool.connect();
 
@@ -550,5 +551,34 @@ export const stopDeployment = async (req, res) => {
     });
   } finally {
     client.release();
+  }
+};
+
+export const exitDeployment = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({ error: "Deployment ID is required" });
+    }
+
+    const result = await pool.query(
+      `UPDATE deployments
+       SET status = 'CLOSED'
+       WHERE id = $1
+       RETURNING *`,
+      [id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "Deployment not found" });
+    }
+
+    res.json({
+      message: "Deployment exited successfully",
+      deployment: result.rows[0],
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 };
