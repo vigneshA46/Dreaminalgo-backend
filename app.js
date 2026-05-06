@@ -25,7 +25,7 @@ import reportsroutes from "./src/modules/reports/reports.routes.js"
 import couponroutes from "./src/modules/coupons/coupons.routes.js"
 import statisticsroutes from "./src/modules/statistics/statistics.routes.js"
 import notification from "./src/modules/notifications/notification.routes.js"
-//#import './src/modules/jobs/deploymentCron.js'
+import "./autoDeploy.job.js"
 
 const app = express();
 

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import * as controller from "./realTradeGroups.controller.js";
+import authenticate from "../../middlewares/authenticate.js";
 
 const router = Router();
 
@@ -21,5 +22,6 @@ router.get("/", controller.getTrades);
 router.get("/latest", controller.getLatestTrade);
 
 router.get("/opentrades", controller.getOpenTrades);
+router.get("/getstatistics",authenticate, controller.getStrategyStatistics);
 
 export default router;

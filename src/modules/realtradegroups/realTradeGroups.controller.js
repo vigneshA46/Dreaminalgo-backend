@@ -149,3 +149,53 @@ export const getOpenTrades = async (req, res) => {
     res.status(500).json({ error: "Failed to fetch open trades" });
   }
 };
+
+export const getStrategyStatistics = async (req, res) => {
+  try {
+    const { strategy_id } = req.body;
+    const userId = req.user.id
+
+    if (!userId || !strategy_id) {
+      return res.status(400).json({ error: "user_id and strategy_id are required" });
+    }
+
+    /* -----------------------------------------
+       1. GET STRATEGY DETAILS
+    ----------------------------------------- */
+    const strategyResult = await pool.query(
+      `SELECT * FROM strategies WHERE id = $1`,
+      [strategy_id]
+    );
+
+    if (strategyResult.rows.length === 0) {
+      return res.status(404).json({ error: "Strategy not found" });
+    }
+
+    const strategy = strategyResult.rows[0];
+
+    /* -----------------------------------------
+       2. DATE-WISE PNL
+    ----------------------------------------- */
+    const pnlResult = await pool.query(
+      `
+      SELECT DISTINCT ON (trade_date)
+        trade_date,
+        cum_pnl
+      FROM real_trade_groups
+      WHERE user_id = $1
+        AND strategy_id = $2
+      ORDER BY trade_date, timestamp DESC
+      `,
+      [userId, strategy_id]
+    );
+
+    res.json({
+      strategy,
+      datewise_pnl: pnlResult.rows
+    });
+
+  } catch (err) {
+    console.error("getStrategyStatistics error:", err);
+    res.status(500).json({ error: "Failed to fetch strategy statistics" });
+  }
+};
