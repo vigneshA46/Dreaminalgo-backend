@@ -131,6 +131,7 @@ await pool.query(
       is_paid BOOLEAN DEFAULT false,
 
       starting_time TIME,  -- ✅ only time (HH:MM:SS)
+      ending_time TIME,
 
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -438,7 +439,9 @@ await pool.query(`
         `
       )
 
-
+/* await pool.query(
+  `ALTER TABLE strategies
+ADD COLUMN ending_time TIME;`)  */
 /* await pool.query(
   `
   ALTER TABLE deployment_configs

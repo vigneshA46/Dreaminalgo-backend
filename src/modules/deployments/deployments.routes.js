@@ -37,5 +37,7 @@ router.get("/userdep/all", authenticate, controller.getUserDeploymentsGroupedWit
 
 router.post("/userdep/stopdep/:id", authenticate, controller.exitDeployment);
 
+router.post("/stopdeployment", authenticate, controller.stopDeployment);
+
 
 export default router;

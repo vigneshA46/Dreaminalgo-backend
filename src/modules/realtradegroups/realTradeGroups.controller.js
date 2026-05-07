@@ -52,6 +52,7 @@ export const createTradeGroup = async (req, res) => {
     res.status(500).json({ error: "Failed to create trade event" });
   }
 };
+
 /*
   GET TRADES (FILTER)
   by strategy_id, broker_id, date
@@ -152,7 +153,7 @@ export const getOpenTrades = async (req, res) => {
 
 export const getStrategyStatistics = async (req, res) => {
   try {
-    const { strategy_id } = req.body;
+    const { strategy_id } = req.query;
     const userId = req.user.id
 
     if (!userId || !strategy_id) {

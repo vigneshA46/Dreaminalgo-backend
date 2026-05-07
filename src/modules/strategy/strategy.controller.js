@@ -100,7 +100,6 @@ export const getStrategyById = async (req, res) => {
 /*
   CREATE STRATEGY (Admin)
 */
-
 export const createStrategy = async (req, res) => {
   try {
     const adminId = req.user.id;
@@ -110,7 +109,9 @@ export const createStrategy = async (req, res) => {
       description,
       capitalRequired,
       tokensRequired,
-      isPaid
+      isPaid,
+      startingTime,
+      endingTime
     } = req.body;
 
     if (!name) {
@@ -120,9 +121,23 @@ export const createStrategy = async (req, res) => {
     const result = await pool.query(
       `
       INSERT INTO strategies
-      (name, description, created_by, is_admin_strategy,
-       capital_required, tokens_required, is_paid, status)
-      VALUES ($1,$2,$3,true,$4,$5,$6,'pending')
+      (
+        name,
+        description,
+        created_by,
+        is_admin_strategy,
+        capital_required,
+        tokens_required,
+        is_paid,
+        starting_time,
+        ending_time,
+        status
+      )
+      VALUES (
+        $1,$2,$3,true,
+        $4,$5,$6,$7,$8,
+        'pending'
+      )
       RETURNING *
       `,
       [
@@ -131,7 +146,9 @@ export const createStrategy = async (req, res) => {
         adminId,
         capitalRequired,
         tokensRequired,
-        isPaid
+        isPaid,
+        startingTime,
+        endingTime
       ]
     );
 
@@ -142,9 +159,13 @@ export const createStrategy = async (req, res) => {
 
   } catch (error) {
     console.error("Create Strategy Error:", error);
-    res.status(500).json({ error: "Server error" });
+
+    res.status(500).json({
+      error: "Server error"
+    });
   }
 };
+
 
 /*
   UPDATE STRATEGY DETAILS
@@ -159,7 +180,9 @@ export const updateStrategy = async (req, res) => {
       description,
       capitalRequired,
       tokensRequired,
-      isPaid
+      isPaid,
+      startingTime,
+      endingTime
     } = req.body;
 
     const result = await pool.query(
@@ -171,15 +194,28 @@ export const updateStrategy = async (req, res) => {
         capital_required = COALESCE($3, capital_required),
         tokens_required = COALESCE($4, tokens_required),
         is_paid = COALESCE($5, is_paid),
+        starting_time = COALESCE($6, starting_time),
+        ending_time = COALESCE($7, ending_time),
         updated_at = NOW()
-      WHERE id = $6
+      WHERE id = $8
       RETURNING *
       `,
-      [name, description, capitalRequired, tokensRequired, isPaid, id]
+      [
+        name,
+        description,
+        capitalRequired,
+        tokensRequired,
+        isPaid,
+        startingTime,
+        endingTime,
+        id
+      ]
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: "Strategy not found" });
+      return res.status(404).json({
+        error: "Strategy not found"
+      });
     }
 
     res.json({
@@ -189,10 +225,12 @@ export const updateStrategy = async (req, res) => {
 
   } catch (error) {
     console.error("Update Strategy Error:", error);
-    res.status(500).json({ error: "Server error" });
+
+    res.status(500).json({
+      error: "Server error"
+    });
   }
 };
-
 /*
   UPDATE STRATEGY STATUS
 */
