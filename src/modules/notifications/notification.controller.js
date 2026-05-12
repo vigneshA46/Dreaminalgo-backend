@@ -29,6 +29,7 @@ export const createNotification = async (req, res) => {
 // -----------------------------
 // GET ACTIVE NOTIFICATIONS (USER)
 // -----------------------------
+
 export const getActiveNotifications = async (req, res) => {
   try {
     const result = await pool.query(
