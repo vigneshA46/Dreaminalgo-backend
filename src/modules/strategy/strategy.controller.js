@@ -19,7 +19,11 @@ export const getStrategies = async (req, res) => {
 
       LEFT JOIN (
         SELECT 
-          startergy_id::uuid AS strategy_id,
+          CASE 
+  WHEN startergy_id ~* 
+  '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+  THEN startergy_id::uuid
+END AS strategy_id,
           MAX(date) AS latest_date
         FROM trade_legs
         GROUP BY startergy_id
