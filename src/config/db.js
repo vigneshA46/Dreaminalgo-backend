@@ -439,6 +439,33 @@ await pool.query(`
         `
       )
 
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS stock_option_strategy_selection (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    trade_date DATE NOT NULL,
+
+    symbol VARCHAR(50) NOT NULL,
+
+    prev_close NUMERIC(15,2),
+    iep NUMERIC(15,2),
+    chng NUMERIC(15,2),
+    pct_chng NUMERIC(10,2),
+
+    final_price NUMERIC(15,2),
+    final_quantity BIGINT,
+
+    value_cr NUMERIC(15,2),
+    ffm_cap_cr NUMERIC(20,2),
+
+    status VARCHAR(20) DEFAULT 'APPROVED',
+
+    created_at TIMESTAMP DEFAULT NOW(),
+
+    UNIQUE(trade_date, symbol)
+);
+        `)
+
 /* await pool.query(
   `ALTER TABLE strategies
 ADD COLUMN ending_time TIME;`)  */
