@@ -186,7 +186,9 @@ export const updateStrategy = async (req, res) => {
       tokensRequired,
       isPaid,
       startingTime,
-      endingTime
+      endingTime,
+      stateId,
+      category
     } = req.body;
 
     const result = await pool.query(
@@ -200,8 +202,10 @@ export const updateStrategy = async (req, res) => {
         is_paid = COALESCE($5, is_paid),
         starting_time = COALESCE($6, starting_time),
         ending_time = COALESCE($7, ending_time),
+        state_id = COALESCE($8, state_id),
+        category = COALESCE($9, category),
         updated_at = NOW()
-      WHERE id = $8
+      WHERE id = $10
       RETURNING *
       `,
       [
@@ -212,6 +216,8 @@ export const updateStrategy = async (req, res) => {
         isPaid,
         startingTime,
         endingTime,
+        stateId,
+        category,
         id
       ]
     );

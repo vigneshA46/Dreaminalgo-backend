@@ -128,6 +128,8 @@ await pool.query(
       status VARCHAR(20) DEFAULT 'pending',
       -- pending / approved / rejected / active
 
+      category TEXT DEFAULT 'others',
+
       is_paid BOOLEAN DEFAULT false,
 
       starting_time TIME,  -- ✅ only time (HH:MM:SS)
