@@ -79,5 +79,26 @@ const runAutoDeployments = async () => {
 // ⏰ Runs at 00:02 AM everyday
 cron.schedule("2 0 * * *", async () => {
   console.log("⏳ Running auto deployment cron...");
+  console.log("--------------------------------");
+  console.log("Cron fired!");
+
+  console.log("Server Date:", new Date());
+
+  console.log(
+    "Timezone:",
+    Intl.DateTimeFormat().resolvedOptions().timeZone
+  );
+
+  console.log(
+    "IST:",
+    new Date().toLocaleString("en-IN", {
+      timeZone: "Asia/Kolkata",
+    })
+  );
   await runAutoDeployments();
-});
+  },
+  {
+    timezone: "Asia/Kolkata",
+  }
+
+);

@@ -1,6 +1,7 @@
 import pool from "../../config/db.js";
 
 // Get unique deployed strategies for a user
+
 export const getUserDeployedStrategies = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -71,6 +72,7 @@ const result = await pool.query(
     });
   }
 };
+
 
 export const getStrategyDatewisePnl = async (req, res) => {
   try {

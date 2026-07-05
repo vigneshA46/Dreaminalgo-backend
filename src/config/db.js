@@ -156,10 +156,10 @@ await pool.query(
   );  
         `)
 
+        
     await pool.query(`
   CREATE TABLE IF NOT EXISTS paper_trades (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-
   run_id UUID,
   strategy_id UUID,
   timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
