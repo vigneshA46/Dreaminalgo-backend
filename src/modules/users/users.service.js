@@ -33,7 +33,7 @@ export const updateMe = async (userId, data) => {
 /* Admin: get all users */
 export const getAllUsers = async () => {
   const { rows } = await pool.query(
-    `SELECT id, email, fullname, role, isactive, createdat, tokens, mobile_number, passwordhash
+    `SELECT id, email, fullname, role, isactive, createdat, tokens, mobile_number, passwordhash , status, remarks
      FROM users 
      ORDER BY createdat DESC`
   );
