@@ -52,6 +52,7 @@ export const getUserById = async (id) => {
 
 /* Admin: update user */
 export const updateUser = async (id, data) => {
+  console.log(data)
   const {
     fullname,
     isactive,
@@ -103,6 +104,7 @@ export const updateUser = async (id, data) => {
       id,
     ]
   );
+  console.log(rows[0]);
 
   return rows[0];
 };
