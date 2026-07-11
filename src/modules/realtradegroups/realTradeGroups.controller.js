@@ -201,7 +201,6 @@ export const getStrategyStatistics = async (req, res) => {
   }
 };
 
-
 export const getStrategyOpenTrades = async (req, res) => {
   try {
     const { strategy_id } = req.query;
@@ -221,7 +220,7 @@ export const getStrategyOpenTrades = async (req, res) => {
 
       FROM real_trade_groups t1
 
-      INNER JOIN broker_accounts b
+      LEFT JOIN broker_accounts b
         ON b.id = t1.broker_id::uuid
 
       WHERE t1.strategy_id = $1
@@ -231,8 +230,14 @@ export const getStrategyOpenTrades = async (req, res) => {
         AND NOT EXISTS (
           SELECT 1
           FROM real_trade_groups t2
-          WHERE t2.trade_id = t1.trade_id
+          WHERE t2.user_id = t1.user_id
+            AND t2.strategy_id = t1.strategy_id
+            AND t2.broker_id = t1.broker_id
+            AND t2.trade_date = t1.trade_date
+            AND t2.symbol = t1.symbol
+            AND t2.leg_name = t1.leg_name
             AND t2.event_type = 'EXIT'
+            AND t2.timestamp > t1.timestamp
         )
 
       ORDER BY t1.timestamp ASC
