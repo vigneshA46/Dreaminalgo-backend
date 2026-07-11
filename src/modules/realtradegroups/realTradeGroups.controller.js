@@ -200,3 +200,52 @@ export const getStrategyStatistics = async (req, res) => {
     res.status(500).json({ error: "Failed to fetch strategy statistics" });
   }
 };
+
+
+export const getStrategyOpenTrades = async (req, res) => {
+  try {
+    const { strategy_id } = req.query;
+
+    if (!strategy_id) {
+      return res.status(400).json({
+        error: "strategy_id is required"
+      });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT
+        t1.*,
+        b.broker_name,
+        b.credentials
+
+      FROM real_trade_groups t1
+
+      INNER JOIN broker_accounts b
+        ON b.id = t1.broker_id::uuid
+
+      WHERE t1.strategy_id = $1
+        AND t1.trade_date = CURRENT_DATE
+        AND t1.event_type = 'ENTRY'
+
+        AND NOT EXISTS (
+          SELECT 1
+          FROM real_trade_groups t2
+          WHERE t2.trade_id = t1.trade_id
+            AND t2.event_type = 'EXIT'
+        )
+
+      ORDER BY t1.timestamp ASC
+      `,
+      [strategy_id]
+    );
+
+    res.json(result.rows);
+
+  } catch (err) {
+    console.error("getStrategyOpenTrades:", err);
+    res.status(500).json({
+      error: "Failed to fetch open trades."
+    });
+  }
+};

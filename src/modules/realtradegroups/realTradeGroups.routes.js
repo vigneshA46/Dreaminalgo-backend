@@ -23,5 +23,8 @@ router.get("/latest", controller.getLatestTrade);
 
 router.get("/opentrades", controller.getOpenTrades);
 router.get("/getstatistics",authenticate, controller.getStrategyStatistics);
+router.get("/strategy-opentrades", controller.getStrategyOpenTrades);
+
+
 
 export default router;
