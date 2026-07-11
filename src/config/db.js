@@ -29,6 +29,8 @@ export const initDB = async () => {
     isactive BOOLEAN DEFAULT true,
     tokens INTEGER DEFAULT 0,
     auth_provider VARCHAR(20) NOT NULL DEFAULT 'local',
+    remarks TEXT,
+    status TEXT,
     createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updatedat TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   );

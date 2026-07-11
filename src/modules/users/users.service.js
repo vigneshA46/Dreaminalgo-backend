@@ -52,7 +52,15 @@ export const getUserById = async (id) => {
 
 /* Admin: update user */
 export const updateUser = async (id, data) => {
-  const { fullname, isactive, mobile_number, tokens, password } = data;
+  const {
+    fullname,
+    isactive,
+    mobile_number,
+    tokens,
+    password,
+    remarks,
+    status,
+  } = data;
 
   const parsedTokens = Number(tokens);
 
@@ -70,15 +78,34 @@ export const updateUser = async (id, data) => {
          mobile_number = COALESCE($3, mobile_number),
          tokens = COALESCE($4, tokens),
          passwordhash = COALESCE($5, passwordhash),
+         remarks = COALESCE($6, remarks),
+         status = COALESCE($7, status),
          updatedat = NOW()
-     WHERE id = $6
-     RETURNING id, email, fullname, role, isactive, mobile_number, tokens`,
-    [fullname, isactive, mobile_number, parsedTokens, hashedPassword, id]
+     WHERE id = $8
+     RETURNING
+       id,
+       email,
+       fullname,
+       role,
+       isactive,
+       mobile_number,
+       tokens,
+       remarks,
+       status`,
+    [
+      fullname,
+      isactive,
+      mobile_number,
+      parsedTokens,
+      hashedPassword,
+      remarks,
+      status,
+      id,
+    ]
   );
 
   return rows[0];
 };
-
 /* Admin: soft delete */
 export const deleteUser = async (id) => {
   await pool.query(
