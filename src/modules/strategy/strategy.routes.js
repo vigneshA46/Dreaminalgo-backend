@@ -15,6 +15,13 @@ router.get(
   strategyController.getStrategies
 );
 
+
+router.get(
+  "/pending",
+  authenticate,
+  strategyController.getpendingStrategies
+);
+
 /*
   GET SINGLE STRATEGY
 */

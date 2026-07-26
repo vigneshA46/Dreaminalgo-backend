@@ -5,6 +5,16 @@ import * as userService from './users.service.js';
 
 const router = Router();
 
+
+router.post(
+'/low-tokens',
+authenticate,
+async (req, res) => {
+  const users = await userService.getUsersWithLowTokens();
+  res.json(users);
+}
+);
+
 /* USER SELF */
 router.post('/me', authenticate, async (req, res) => {
 const user = await userService.getMe(req.user.id);
@@ -31,34 +41,35 @@ async (req, res) => {
 }
 );
 
+
 router.get(
-'/:id',
-authenticate,
-authorize('superadmin', 'courseadmin'),
-async (req, res) => {
-  const user = await userService.getUserById(req.params.id);
-  res.json(user);
-}
+  '/:id',
+  authenticate,
+  authorize('superadmin', 'courseadmin'),
+  async (req, res) => {
+    const user = await userService.getUserById(req.params.id);
+    res.json(user);
+  }
 );
 
 router.put(
-'/:id',
-authenticate,
-authorize('superadmin'),
-async (req, res) => {
-  const user = await userService.updateUser(req.params.id, req.body);
-  res.json(user);
-}
+  '/:id',
+  authenticate,
+  authorize('superadmin'),
+  async (req, res) => {
+    const user = await userService.updateUser(req.params.id, req.body);
+    res.json(user);
+  }
 );
 
 router.delete(
-'/:id',
-authenticate,
-authorize('superadmin'),
-async (req, res) => {
-  await userService.deleteUser(req.params.id);
-  res.json({ message: 'User deactivated' });
-}
+  '/:id',
+  authenticate,
+  authorize('superadmin'),
+  async (req, res) => {
+    await userService.deleteUser(req.params.id);
+    res.json({ message: 'User deactivated' });
+  }
 );
 
 export default router;

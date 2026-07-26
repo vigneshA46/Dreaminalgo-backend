@@ -109,9 +109,37 @@ export const updateUser = async (id, data) => {
   return rows[0];
 };
 /* Admin: soft delete */
+/* Admin: permanently delete user */
 export const deleteUser = async (id) => {
-  await pool.query(
-    'UPDATE users SET isactive = false, updatedat = NOW() WHERE id = $1',
+  const { rows } = await pool.query(
+    `DELETE FROM users
+     WHERE id = $1
+     RETURNING id, email, fullname`,
     [id]
   );
+
+  return rows[0];
+};
+
+
+/* Admin: get users with low tokens */
+export const getUsersWithLowTokens = async () => {
+  const { rows } = await pool.query(
+    `SELECT
+       id,
+       email,
+       fullname,
+       role,
+       isactive,
+       createdat,
+       tokens,
+       mobile_number,
+       status,
+       remarks
+     FROM users
+     WHERE tokens < 5
+     ORDER BY tokens ASC, createdat DESC`
+  );
+
+  return rows;
 };
