@@ -253,7 +253,6 @@ export const createStrategy = async (req, res) => {
 /*
   UPDATE STRATEGY DETAILS
 */
-
 export const updateStrategy = async (req, res) => {
   try {
     const { id } = req.params;
@@ -267,8 +266,19 @@ export const updateStrategy = async (req, res) => {
       startingTime,
       endingTime,
       stateId,
-      category
+      category,
+      isUserFeature,
+      users
     } = req.body;
+
+    // Validate users when user-specific feature is enabled
+    if (isUserFeature === true) {
+      if (!Array.isArray(users)) {
+        return res.status(400).json({
+          error: "users must be an array of user IDs"
+        });
+      }
+    }
 
     const result = await pool.query(
       `
@@ -283,8 +293,10 @@ export const updateStrategy = async (req, res) => {
         ending_time = COALESCE($7, ending_time),
         state_id = COALESCE($8, state_id),
         category = COALESCE($9, category),
+        is_user_feature = COALESCE($10, is_user_feature),
+        users = COALESCE($11::uuid[], users),
         updated_at = NOW()
-      WHERE id = $10
+      WHERE id = $12
       RETURNING *
       `,
       [
@@ -297,6 +309,8 @@ export const updateStrategy = async (req, res) => {
         endingTime,
         stateId,
         category,
+        isUserFeature,
+        users,
         id
       ]
     );
@@ -319,8 +333,7 @@ export const updateStrategy = async (req, res) => {
       error: "Server error"
     });
   }
-};
-/*
+};/*
   UPDATE STRATEGY STATUS
 */
 

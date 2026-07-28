@@ -137,6 +137,9 @@ await pool.query(
       starting_time TIME,  -- ✅ only time (HH:MM:SS)
       ending_time TIME,
 
+      is_user_feature BOOLEAN DEFAULT FALSE,
+      users UUID[] DEFAULT '{}',
+
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   );
@@ -469,6 +472,10 @@ await pool.query(`
     UNIQUE(trade_date, symbol)
 );
         `)
+
+
+
+
 
 /* await pool.query(
   `ALTER TABLE strategies
