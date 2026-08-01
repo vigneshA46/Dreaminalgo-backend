@@ -71,4 +71,6 @@ router.delete(
   strategyController.deleteStrategy
 );
 
+router.get("/user/:userId", authenticate, strategyController.getUserStrategies);
+
 export default router;

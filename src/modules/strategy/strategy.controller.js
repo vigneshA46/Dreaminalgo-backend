@@ -397,3 +397,92 @@ export const deleteStrategy = async (req, res) => {
   }
 };
  
+
+/*
+  GET USER STRATEGIES
+  Returns strategies available for a specific user
+*/
+
+export const getUserStrategies = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { search, paid } = req.query;
+
+    let values = [userId];
+
+    let baseQuery = `
+      SELECT
+        s.*,
+        tl.latest_date,
+        COALESCE(pt.cum_pnl, 0) AS latest_cum_pnl
+
+      FROM strategies s
+
+      LEFT JOIN (
+        SELECT
+          CASE
+            WHEN startergy_id ~*
+            '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+            THEN startergy_id::uuid
+          END AS strategy_id,
+          MAX(date) AS latest_date
+        FROM trade_legs
+        GROUP BY startergy_id
+      ) tl ON tl.strategy_id = s.id
+
+      LEFT JOIN LATERAL (
+        SELECT
+          CAST(cum_pnl AS NUMERIC) AS cum_pnl
+        FROM paper_trades
+        WHERE strategy_id::uuid = s.id
+          AND DATE(timestamp) = tl.latest_date
+          AND event_type = 'EXIT'
+        ORDER BY timestamp DESC
+        LIMIT 1
+      ) pt ON true
+
+      WHERE s.status = 'active'
+      AND (
+            s.is_user_feature = false
+            OR (
+                s.is_user_feature = true
+                AND $1::uuid = ANY(s.users)
+            )
+      )
+    `;
+
+    // Search filter
+    if (search) {
+      values.push(`%${search}%`);
+      baseQuery += ` AND s.name ILIKE $${values.length}`;
+    }
+
+    // Paid filter
+    if (paid !== undefined) {
+      values.push(paid === "true");
+      baseQuery += ` AND s.is_paid = $${values.length}`;
+    }
+
+    const dataQuery = baseQuery + ` ORDER BY s.created_at DESC`;
+
+    const result = await pool.query(dataQuery, values);
+
+    const overallQuery = `
+      SELECT COALESCE(SUM(latest_cum_pnl), 0) AS overall_pnl
+      FROM (${baseQuery}) sub
+    `;
+
+    const overallResult = await pool.query(overallQuery, values);
+
+    res.json({
+      strategies: result.rows,
+      overall_pnl: overallResult.rows[0].overall_pnl
+    });
+
+  } catch (error) {
+    console.error("Get User Strategies Error:", error);
+    res.status(500).json({
+      error: "Server error"
+    });
+  }
+};
