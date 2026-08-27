@@ -110,9 +110,7 @@ export const initDB = async () => {
   );
   `)
 
-  
-await pool.query(
-  `
+  await pool.query(`
   CREATE TABLE IF NOT EXISTS strategies (
       id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
 
@@ -125,16 +123,22 @@ await pool.query(
       state_id TEXT,
 
       capital_required NUMERIC,
+
       tokens_required INTEGER DEFAULT 1,
 
+      reducetokenonmultiplies BOOLEAN DEFAULT TRUE,
+
+      reductionmultiplier INTEGER DEFAULT 1
+        CHECK (reductionmultiplier >= 1),
+
       status VARCHAR(20) DEFAULT 'pending',
-      -- pending / approved / rejected / active
+      -- pending / approved / rejected / active / disabled
 
       category TEXT DEFAULT 'others',
 
       is_paid BOOLEAN DEFAULT false,
 
-      starting_time TIME,  -- ✅ only time (HH:MM:SS)
+      starting_time TIME,
       ending_time TIME,
 
       is_user_feature BOOLEAN DEFAULT FALSE,
@@ -143,8 +147,8 @@ await pool.query(
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   );
-  `
-);
+`);
+
 
       await pool.query(`
         CREATE TABLE IF NOT EXISTS strategy_subscriptions (
@@ -485,6 +489,7 @@ await pool.query(`
       `)
 
 
+    
 
 
 

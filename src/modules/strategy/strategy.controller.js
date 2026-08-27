@@ -258,17 +258,19 @@ export const updateStrategy = async (req, res) => {
     const { id } = req.params;
 
     const {
-      name,
-      description,
-      capitalRequired,
-      tokensRequired,
-      isPaid,
-      startingTime,
-      endingTime,
-      stateId,
-      category,
-      isUserFeature,
-      users
+    name,
+    description,
+    capitalRequired,
+    tokensRequired,
+    reducetokenonmultiplies,
+    reductionmultiplier,
+    isPaid,
+    startingTime,
+    endingTime,
+    stateId,
+    category,
+    isUserFeature,
+    users
     } = req.body;
 
     // Validate users when user-specific feature is enabled
@@ -279,42 +281,49 @@ export const updateStrategy = async (req, res) => {
         });
       }
     }
+    
+const result = await pool.query(
+  `
+  UPDATE strategies
+  SET
+    name = COALESCE($1, name),
+    description = COALESCE($2, description),
+    capital_required = COALESCE($3, capital_required),
+    tokens_required = COALESCE($4, tokens_required),
 
-    const result = await pool.query(
-      `
-      UPDATE strategies
-      SET
-        name = COALESCE($1, name),
-        description = COALESCE($2, description),
-        capital_required = COALESCE($3, capital_required),
-        tokens_required = COALESCE($4, tokens_required),
-        is_paid = COALESCE($5, is_paid),
-        starting_time = COALESCE($6, starting_time),
-        ending_time = COALESCE($7, ending_time),
-        state_id = COALESCE($8, state_id),
-        category = COALESCE($9, category),
-        is_user_feature = COALESCE($10, is_user_feature),
-        users = COALESCE($11::uuid[], users),
-        updated_at = NOW()
-      WHERE id = $12
-      RETURNING *
-      `,
-      [
-        name,
-        description,
-        capitalRequired,
-        tokensRequired,
-        isPaid,
-        startingTime,
-        endingTime,
-        stateId,
-        category,
-        isUserFeature,
-        users,
-        id
-      ]
-    );
+    reducetokenonmultiplies = COALESCE($5, reducetokenonmultiplies),
+    reductionmultiplier = COALESCE($6, reductionmultiplier),
 
+    is_paid = COALESCE($7, is_paid),
+    starting_time = COALESCE($8, starting_time),
+    ending_time = COALESCE($9, ending_time),
+    state_id = COALESCE($10, state_id),
+    category = COALESCE($11, category),
+    is_user_feature = COALESCE($12, is_user_feature),
+    users = COALESCE($13::uuid[], users),
+    updated_at = NOW()
+
+  WHERE id = $14
+
+  RETURNING *
+  `,
+  [
+    name,
+    description,
+    capitalRequired,
+    tokensRequired,
+    reducetokenonmultiplies,
+    reductionmultiplier,
+    isPaid,
+    startingTime,
+    endingTime,
+    stateId,
+    category,
+    isUserFeature,
+    users,
+    id
+  ]
+);
     if (result.rows.length === 0) {
       return res.status(404).json({
         error: "Strategy not found"
