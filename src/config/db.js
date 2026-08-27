@@ -473,6 +473,17 @@ await pool.query(`
 );
         `)
 
+      await pool.query(`
+          CREATE TABLE IF NOT EXISTS tokenlogs (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          previous_tokens INTEGER NOT NULL,
+          updated_tokens INTEGER NOT NULL,
+          notes TEXT,
+          createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `)
+
 
 
 

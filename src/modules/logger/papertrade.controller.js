@@ -86,6 +86,7 @@ export const createTradeEvent = async (req, res) => {
     });
   }
 };
+
 /*
 -----------------------------------------
 GET TRADES BY DATE + TOKEN + STRATEGY
