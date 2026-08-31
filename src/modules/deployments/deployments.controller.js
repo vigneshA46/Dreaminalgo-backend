@@ -19,6 +19,7 @@ function getISTStartEndOfDay() {
   };
 }
 
+
 export const createDeployment = async (req, res) => {
   const client = await pool.connect();
 
@@ -100,6 +101,7 @@ export const createDeployment = async (req, res) => {
   }
 };
 
+
 export const getTodayDeploymentsByStrategy = async (req, res) => {
   try {
     const { strategy_id } = req.params;
@@ -124,6 +126,7 @@ export const getTodayDeploymentsByStrategy = async (req, res) => {
   }
 };
 
+
 export const getTodayDeploymentsByStrategyAndType = async (req, res) => {
   try {
     const { strategy_id, type } = req.params;
@@ -147,6 +150,7 @@ export const getTodayDeploymentsByStrategyAndType = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
 
 export const getUserDeployments = async (req, res) => {
   try {
@@ -505,6 +509,7 @@ export const updateDeploymentStatusByDate = async (req, res) => {
   }
 };
 
+
 export const stopDeployment = async (req, res) => {
   const client = await pool.connect();
 
@@ -554,6 +559,7 @@ export const stopDeployment = async (req, res) => {
     client.release();
   }
 };
+
 
 export const exitDeployment = async (req, res) => {
   try {

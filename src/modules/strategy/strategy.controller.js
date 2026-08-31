@@ -405,7 +405,7 @@ export const deleteStrategy = async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 };
- 
+
 
 /*
   GET USER STRATEGIES

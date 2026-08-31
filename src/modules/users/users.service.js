@@ -96,7 +96,7 @@ export const updateUser = async (id, data) => {
       throw new Error('User not found');
     }
 
-    const previousTokens = existingRows[0].tokens;
+    const previousTokens = existingRows[0].tokens ?? 0;
 
     // Update user
     const { rows } = await client.query(
