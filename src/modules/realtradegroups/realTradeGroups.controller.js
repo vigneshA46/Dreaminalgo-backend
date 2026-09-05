@@ -201,8 +201,6 @@ export const getStrategyStatistics = async (req, res) => {
   }
 };
 
-
-
 export const getStrategyOpenTrades = async (req, res) => {
   try {
     const { strategy_id } = req.query;
@@ -223,14 +221,11 @@ export const getStrategyOpenTrades = async (req, res) => {
 
       FROM real_trade_groups t1
 
-      LEFT JOIN broker_accounts b
-        ON b.id = t1.broker_id::uuid
-
-      LEFT JOIN deployments d
+      INNER JOIN deployments d
         ON d.user_id = t1.user_id::uuid
         AND d.strategy_id = t1.strategy_id::uuid
         AND d.broker_account_id = t1.broker_id::uuid
-        AND d.status IN ('ACTIVE', 'CLOSED')
+        AND d.status = 'ACTIVE'
 
         -- Only today's deployment (IST)
         AND d.deployed_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
@@ -238,6 +233,9 @@ export const getStrategyOpenTrades = async (req, res) => {
             AND date_trunc('day', now() AT TIME ZONE 'Asia/Kolkata')
                 + interval '1 day'
                 - interval '1 second'
+
+      LEFT JOIN broker_accounts b
+        ON b.id = t1.broker_id::uuid
 
       WHERE t1.strategy_id = $1
         AND t1.trade_date = CURRENT_DATE
