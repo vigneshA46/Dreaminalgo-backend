@@ -15,6 +15,13 @@ router.post(
   brokerController.connectBroker
 );
 
+router.get(
+  "/all-with-users",
+  authenticate,
+  authorize("superadmin", "admin"),
+  brokerController.getAllBrokersWithUsers
+);
+
 router.post(
   "/alice/callback",
   authenticate,

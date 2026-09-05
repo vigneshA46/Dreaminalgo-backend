@@ -730,3 +730,62 @@ export const flattradeCallback = async (req, res) => {
     });
   }
 };
+
+
+/*
+  GET ALL BROKERS WITH USER DATA + CREDENTIALS
+*/
+export const getAllBrokersWithUsers = async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        -- BROKER DATA
+        b.id AS broker_id,
+        b.user_id,
+        b.broker_name,
+        b.client_id,
+        b.credentials,
+        b.status AS broker_status,
+        b.token_expires_at,
+        b.last_sync,
+        b.created_at AS broker_created_at,
+        b.updated_at AS broker_updated_at,
+
+        -- USER DATA
+        u.id AS user_id,
+        u.fullname AS user_fullname,
+        u.email AS user_email,
+        u.mobile_number AS user_mobile,
+        u.role AS user_role,
+        u.isactive AS user_isactive,
+        u.tokens AS user_tokens,
+        u.auth_provider AS user_auth_provider,
+        u.remarks AS user_remarks,
+        u.status AS user_status,
+        u.createdat AS user_created_at,
+        u.updatedat AS user_updated_at
+
+      FROM broker_accounts b
+
+      LEFT JOIN users u
+        ON b.user_id = u.id
+
+      ORDER BY b.created_at DESC
+    `);
+
+    return res.status(200).json({
+      success: true,
+      count: result.rows.length,
+      brokers: result.rows
+    });
+
+  } catch (error) {
+    console.error("Get All Brokers With Users Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      error: "Server error"
+    });
+  }
+};
+ 
