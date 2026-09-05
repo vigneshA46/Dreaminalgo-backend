@@ -201,13 +201,15 @@ export const getStrategyStatistics = async (req, res) => {
   }
 };
 
+
+
 export const getStrategyOpenTrades = async (req, res) => {
   try {
     const { strategy_id } = req.query;
 
     if (!strategy_id) {
       return res.status(400).json({
-        error: "strategy_id is required"
+        error: "strategy_id is required",
       });
     }
 
@@ -216,12 +218,26 @@ export const getStrategyOpenTrades = async (req, res) => {
       SELECT
         t1.*,
         b.broker_name,
-        b.credentials
+        b.credentials,
+        d.multiplier
 
       FROM real_trade_groups t1
 
       LEFT JOIN broker_accounts b
         ON b.id = t1.broker_id::uuid
+
+      LEFT JOIN deployments d
+        ON d.user_id = t1.user_id::uuid
+        AND d.strategy_id = t1.strategy_id::uuid
+        AND d.broker_account_id = t1.broker_id::uuid
+        AND d.status IN ('ACTIVE', 'CLOSED')
+
+        -- Only today's deployment (IST)
+        AND d.deployed_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
+            BETWEEN date_trunc('day', now() AT TIME ZONE 'Asia/Kolkata')
+            AND date_trunc('day', now() AT TIME ZONE 'Asia/Kolkata')
+                + interval '1 day'
+                - interval '1 second'
 
       WHERE t1.strategy_id = $1
         AND t1.trade_date = CURRENT_DATE
@@ -249,8 +265,9 @@ export const getStrategyOpenTrades = async (req, res) => {
 
   } catch (err) {
     console.error("getStrategyOpenTrades:", err);
+
     res.status(500).json({
-      error: "Failed to fetch open trades."
+      error: "Failed to fetch open trades.",
     });
   }
 };
