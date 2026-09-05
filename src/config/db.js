@@ -150,6 +150,55 @@ export const initDB = async () => {
 `);
 
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS saved_strategies (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+
+      strategy_id UUID REFERENCES strategies(id) ON DELETE SET NULL,
+
+      name VARCHAR(255) NOT NULL,
+      description TEXT,
+
+      created_by UUID REFERENCES users(id),
+
+      is_admin_strategy BOOLEAN DEFAULT false,
+
+      state_id TEXT,
+
+      capital_required NUMERIC,
+
+      tokens_required INTEGER DEFAULT 1,
+
+      reducetokenonmultiplies BOOLEAN DEFAULT TRUE,
+
+      reductionmultiplier INTEGER DEFAULT 1
+      CHECK (reductionmultiplier >= 1),
+
+      status VARCHAR(20) DEFAULT 'active',
+
+      category TEXT DEFAULT 'others',
+
+      is_paid BOOLEAN DEFAULT false,
+
+      starting_time TIME,
+      ending_time TIME,
+
+      is_user_feature BOOLEAN DEFAULT FALSE,
+
+      users UUID[] DEFAULT '{}',
+
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+      CONSTRAINT unique_user_saved_strategy
+      UNIQUE (user_id, strategy_id)
+  );
+`);
+
+
+
       await pool.query(`
         CREATE TABLE IF NOT EXISTS strategy_subscriptions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
