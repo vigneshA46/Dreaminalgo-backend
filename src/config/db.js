@@ -150,52 +150,53 @@ export const initDB = async () => {
 `);
 
 
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS saved_strategies (
-      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  
+await pool.query(`
+  CREATE TABLE IF NOT EXISTS saved_strategies (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
 
-      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 
-      strategy_id UUID REFERENCES strategies(id) ON DELETE SET NULL,
+    strategy_id UUID REFERENCES strategies(id) ON DELETE SET NULL,
 
-      name VARCHAR(255) NOT NULL,
-      description TEXT,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
 
-      created_by UUID REFERENCES users(id),
+    is_admin_strategy BOOLEAN DEFAULT false,
 
-      is_admin_strategy BOOLEAN DEFAULT false,
+    state_id TEXT,
 
-      state_id TEXT,
+    capital_required NUMERIC,
 
-      capital_required NUMERIC,
+    tokens_required INTEGER DEFAULT 1,
 
-      tokens_required INTEGER DEFAULT 1,
+    reducetokenonmultiplies BOOLEAN DEFAULT TRUE,
 
-      reducetokenonmultiplies BOOLEAN DEFAULT TRUE,
-
-      reductionmultiplier INTEGER DEFAULT 1
+    reductionmultiplier INTEGER DEFAULT 1
       CHECK (reductionmultiplier >= 1),
 
-      status VARCHAR(20) DEFAULT 'active',
+    status VARCHAR(20) DEFAULT 'active',
 
-      category TEXT DEFAULT 'others',
+    category TEXT DEFAULT 'others',
 
-      is_paid BOOLEAN DEFAULT false,
+    is_paid BOOLEAN DEFAULT false,
 
-      starting_time TIME,
-      ending_time TIME,
+    starting_time TIME,
+    ending_time TIME,
 
-      is_user_feature BOOLEAN DEFAULT FALSE,
+    is_user_feature BOOLEAN DEFAULT FALSE,
 
-      users UUID[] DEFAULT '{}',
+    users UUID[] DEFAULT '{}',
 
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
-      CONSTRAINT unique_user_saved_strategy
+    CONSTRAINT unique_user_saved_strategy
       UNIQUE (user_id, strategy_id)
   );
 `);
+
+
 
 
 

@@ -4,7 +4,7 @@ import pool from "../../config/db.js";
 /*
   CREATE / SAVE STRATEGY
 
-  Logged-in user saves an existing strategy.
+  Logged-in user saves an existing active strategy.
 */
 export const createSavedStrategy = async (req, res) => {
   try {
@@ -39,7 +39,8 @@ export const createSavedStrategy = async (req, res) => {
     const strategy = strategyResult.rows[0];
 
     /*
-      Check whether user already saved this strategy
+      Check whether this user has already saved
+      this strategy
     */
     const existingResult = await pool.query(
       `
@@ -59,6 +60,9 @@ export const createSavedStrategy = async (req, res) => {
 
     /*
       Create saved strategy
+
+      NOTE:
+      created_by is intentionally NOT included.
     */
     const result = await pool.query(
       `
@@ -69,7 +73,6 @@ export const createSavedStrategy = async (req, res) => {
 
         name,
         description,
-        created_by,
         is_admin_strategy,
 
         state_id,
@@ -97,24 +100,23 @@ export const createSavedStrategy = async (req, res) => {
         $3,
         $4,
         $5,
-        $6,
 
+        $6,
         $7,
         $8,
-        $9,
 
+        $9,
         $10,
-        $11,
 
         'active',
+        $11,
         $12,
+
         $13,
-
         $14,
-        $15,
 
-        $16,
-        $17
+        $15,
+        $16
       )
       RETURNING *
       `,
@@ -124,7 +126,6 @@ export const createSavedStrategy = async (req, res) => {
 
         strategy.name,
         strategy.description,
-        strategy.created_by,
         strategy.is_admin_strategy,
 
         strategy.state_id,
@@ -152,6 +153,15 @@ export const createSavedStrategy = async (req, res) => {
 
   } catch (error) {
     console.error("Create Saved Strategy Error:", error);
+
+    /*
+      Handle duplicate database constraint as well.
+    */
+    if (error.code === "23505") {
+      return res.status(409).json({
+        error: "Strategy already saved"
+      });
+    }
 
     res.status(500).json({
       error: "Server error"
@@ -206,9 +216,7 @@ export const getMySavedStrategies = async (req, res) => {
         FROM paper_trades
 
         WHERE strategy_id::uuid = ss.strategy_id
-
           AND DATE(timestamp) = tl.latest_date
-
           AND event_type = 'EXIT'
 
         ORDER BY timestamp DESC
@@ -220,8 +228,9 @@ export const getMySavedStrategies = async (req, res) => {
         AND ss.status = 'active'
     `;
 
+
     /*
-      Search
+      Search filter
     */
     if (search) {
       values.push(`%${search}%`);
@@ -230,6 +239,7 @@ export const getMySavedStrategies = async (req, res) => {
         AND ss.name ILIKE $${values.length}
       `;
     }
+
 
     /*
       Paid filter
@@ -242,8 +252,9 @@ export const getMySavedStrategies = async (req, res) => {
       `;
     }
 
+
     /*
-      Main query
+      Main data query
     */
     const dataQuery = `
       ${baseQuery}
@@ -254,6 +265,7 @@ export const getMySavedStrategies = async (req, res) => {
       dataQuery,
       values
     );
+
 
     /*
       Overall PNL
@@ -271,6 +283,7 @@ export const getMySavedStrategies = async (req, res) => {
       overallQuery,
       values
     );
+
 
     res.json({
       strategies: result.rows,
@@ -313,6 +326,7 @@ export const getAllSavedStrategies = async (req, res) => {
       WHERE ss.status = 'active'
     `;
 
+
     /*
       Search by strategy name
     */
@@ -323,6 +337,7 @@ export const getAllSavedStrategies = async (req, res) => {
         AND ss.name ILIKE $${values.length}
       `;
     }
+
 
     /*
       Paid filter
@@ -335,6 +350,7 @@ export const getAllSavedStrategies = async (req, res) => {
       `;
     }
 
+
     /*
       Filter by user
     */
@@ -346,6 +362,7 @@ export const getAllSavedStrategies = async (req, res) => {
       `;
     }
 
+
     const result = await pool.query(
       `
       ${baseQuery}
@@ -353,6 +370,7 @@ export const getAllSavedStrategies = async (req, res) => {
       `,
       values
     );
+
 
     res.json({
       strategies: result.rows
@@ -378,6 +396,7 @@ export const deleteSavedStrategy = async (req, res) => {
     const userId = req.user.id;
     const { id } = req.params;
 
+
     const result = await pool.query(
       `
       DELETE FROM saved_strategies
@@ -388,11 +407,13 @@ export const deleteSavedStrategy = async (req, res) => {
       [id, userId]
     );
 
+
     if (result.rows.length === 0) {
       return res.status(404).json({
         error: "Saved strategy not found"
       });
     }
+
 
     res.json({
       message: "Saved strategy removed successfully"
