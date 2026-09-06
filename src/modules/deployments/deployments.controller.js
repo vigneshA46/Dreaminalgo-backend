@@ -24,14 +24,170 @@ export const createDeployment = async (req, res) => {
   const client = await pool.connect();
 
   try {
-    const { strategy_id, type, broker_account_id, multiplier } = req.body;
+    const {
+      strategy_id,
+      type,
+      broker_account_id,
+      multiplier
+    } = req.body;
+
     const user_id = req.user.id;
+
+    /* -----------------------------------------
+       BASIC VALIDATION
+    ----------------------------------------- */
+
+    if (!strategy_id) {
+      return res.status(400).json({
+        success: false,
+        message: "Strategy ID is required"
+      });
+    }
+
+    if (!type) {
+      return res.status(400).json({
+        success: false,
+        message: "Deployment type is required"
+      });
+    }
+
+    const deploymentMultiplier = Number(multiplier);
+
+    if (
+      !Number.isInteger(deploymentMultiplier) ||
+      deploymentMultiplier < 1
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Multiplier must be a positive integer"
+      });
+    }
 
     await client.query("BEGIN");
 
-    // 🔒 Lock user row
+    /* -----------------------------------------
+       1. GET STRATEGY TOKEN CONFIGURATION
+    ----------------------------------------- */
+
+    const strategyRes = await client.query(
+      `
+      SELECT
+        tokens_required,
+        reducetokenonmultiplies,
+        reductionmultiplier
+      FROM strategies
+      WHERE id = $1
+      FOR UPDATE
+      `,
+      [strategy_id]
+    );
+
+    if (!strategyRes.rows.length) {
+      throw new Error("Strategy not found");
+    }
+
+    const strategy = strategyRes.rows[0];
+
+    const tokensRequired = Number(strategy.tokens_required ?? 1);
+    const reduceTokenOnMultiplies =
+      strategy.reducetokenonmultiplies === true;
+
+    const reductionMultiplier =
+      Number(strategy.reductionmultiplier ?? 1);
+
+    /* -----------------------------------------
+       VALIDATE STRATEGY TOKEN CONFIGURATION
+    ----------------------------------------- */
+
+    if (!Number.isInteger(tokensRequired) || tokensRequired < 1) {
+      throw new Error("Invalid tokens_required configuration");
+    }
+
+    if (
+      !Number.isInteger(reductionMultiplier) ||
+      reductionMultiplier < 1
+    ) {
+      throw new Error("Invalid reductionmultiplier configuration");
+    }
+
+    /* -----------------------------------------
+       2. CALCULATE TOKENS TO DEDUCT
+    ----------------------------------------- */
+
+    let tokensToDeduct;
+
+    // CASE 1:
+    // reduceTokenOnMultiplies = false
+    //
+    // Whatever the multiplier is,
+    // only tokens_required tokens are deducted.
+
+    if (!reduceTokenOnMultiplies) {
+      tokensToDeduct = tokensRequired;
+    }
+
+    // CASE 2:
+    // reductionMultiplier = 1
+    //
+    // 1X -> 1 token
+    // 2X -> 2 tokens
+    // 3X -> 3 tokens
+    // etc.
+    //
+    // For tokens_required = 1:
+    // tokens = multiplier
+
+    else if (reductionMultiplier === 1) {
+      tokensToDeduct =
+        tokensRequired + deploymentMultiplier - 1;
+    }
+
+    // CASES 3, 4, 5, 6...
+    //
+    // Example reductionMultiplier = 2:
+    //
+    // 1X       -> 1
+    // 2X, 3X   -> 2
+    // 4X, 5X   -> 3
+    // 6X, 7X   -> 4
+    //
+    // Example reductionMultiplier = 3:
+    //
+    // 1X, 2X       -> 1
+    // 3X, 4X, 5X   -> 2
+    // 6X, 7X, 8X   -> 3
+    //
+    // Example reductionMultiplier = 4:
+    //
+    // 1X, 2X, 3X       -> 1
+    // 4X, 5X, 6X, 7X   -> 2
+    // 8X, 9X, 10X, 11X -> 3
+
+    else if (deploymentMultiplier < reductionMultiplier) {
+      tokensToDeduct = tokensRequired;
+    } else {
+      tokensToDeduct =
+        tokensRequired +
+        Math.ceil(
+          (
+            deploymentMultiplier -
+            reductionMultiplier +
+            1
+          ) / reductionMultiplier
+        );
+    }
+
+    /* -----------------------------------------
+       3. LOCK USER ROW
+    ----------------------------------------- */
+
     const userRes = await client.query(
-      `SELECT tokens FROM users WHERE id = $1 FOR UPDATE`,
+      `
+      SELECT tokens
+      FROM users
+      WHERE id = $1
+      FOR UPDATE
+      `,
       [user_id]
     );
 
@@ -39,63 +195,122 @@ export const createDeployment = async (req, res) => {
       throw new Error("User not found");
     }
 
-    const tokens = userRes.rows[0].tokens;
+    const availableTokens = Number(userRes.rows[0].tokens || 0);
 
-    if (tokens <= 0) {
-      throw new Error("Insufficient tokens");
+    /* -----------------------------------------
+       4. CHECK AVAILABLE TOKENS
+    ----------------------------------------- */
+
+    if (availableTokens < tokensToDeduct) {
+      throw new Error(
+        `Insufficient tokens. Required: ${tokensToDeduct}, Available: ${availableTokens}`
+      );
     }
 
-    // ➖ Deduct token
+    /* -----------------------------------------
+       5. DEDUCT TOKENS
+    ----------------------------------------- */
+
     await client.query(
-      `UPDATE users SET tokens = tokens - 1 WHERE id = $1`,
-      [user_id]
+      `
+      UPDATE users
+      SET tokens = tokens - $1
+      WHERE id = $2
+      `,
+      [tokensToDeduct, user_id]
     );
 
     /* -----------------------------------------
-       1. UPSERT DEPLOYMENT CONFIG
+       6. UPSERT DEPLOYMENT CONFIG
     ----------------------------------------- */
+
     await client.query(
       `
-      INSERT INTO deployment_configs 
-        (user_id, strategy_id, broker_account_id, type, multiplier, auto_deploy)
-      VALUES ($1, $2, $3, $4, $5, true)
+      INSERT INTO deployment_configs
+        (
+          user_id,
+          strategy_id,
+          broker_account_id,
+          type,
+          multiplier,
+          auto_deploy
+        )
+      VALUES
+        ($1, $2, $3, $4, $5, true)
 
-      ON CONFLICT (user_id, strategy_id, broker_account_id, type)
+      ON CONFLICT
+        (
+          user_id,
+          strategy_id,
+          broker_account_id,
+          type
+        )
       DO UPDATE SET
         multiplier = EXCLUDED.multiplier,
         auto_deploy = true,
         created_at = CURRENT_TIMESTAMP
       `,
-      [user_id, strategy_id, broker_account_id || null, type, multiplier]
+      [
+        user_id,
+        strategy_id,
+        broker_account_id || null,
+        type,
+        deploymentMultiplier
+      ]
     );
 
     /* -----------------------------------------
-       2. INSERT TODAY DEPLOYMENT
+       7. CREATE TODAY'S DEPLOYMENT
     ----------------------------------------- */
+
     const result = await client.query(
       `
-      INSERT INTO deployments 
-        (user_id, strategy_id, type, broker_account_id, multiplier, status)
-      VALUES ($1, $2, $3, $4, $5, 'ACTIVE')
+      INSERT INTO deployments
+        (
+          user_id,
+          strategy_id,
+          type,
+          broker_account_id,
+          multiplier,
+          status
+        )
+      VALUES
+        ($1, $2, $3, $4, $5, 'ACTIVE')
       RETURNING *
       `,
-      [user_id, strategy_id, type, broker_account_id || null, multiplier]
+      [
+        user_id,
+        strategy_id,
+        type,
+        broker_account_id || null,
+        deploymentMultiplier
+      ]
     );
+
+    /* -----------------------------------------
+       8. COMMIT EVERYTHING
+    ----------------------------------------- */
 
     await client.query("COMMIT");
 
     res.json({
       success: true,
-      deployment: result.rows[0]
+      deployment: result.rows[0],
+      tokensDeducted: tokensToDeduct,
+      remainingTokens: availableTokens - tokensToDeduct
     });
 
   } catch (err) {
+
     await client.query("ROLLBACK");
+
+    console.error("Create deployment error:", err);
 
     res.status(400).json({
       success: false,
       message: err.message
     });
+
   } finally {
     client.release();
   }
