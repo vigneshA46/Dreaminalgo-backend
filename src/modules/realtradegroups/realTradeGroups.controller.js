@@ -104,50 +104,85 @@ export const getLatestTrade = async (req, res) => {
   }
 };
 
+
 export const getOpenTrades = async (req, res) => {
   try {
-    const { user_id, strategy_id, broker_id, date } = req.body;
+    const {
+      user_id,
+      strategy_id,
+      broker_id,
+      date
+    } = req.body;
+
+    if (!user_id || !strategy_id || !broker_id || !date) {
+      return res.status(400).json({
+        error: "user_id, strategy_id, broker_id and date are required",
+      });
+    }
 
     const result = await pool.query(
-  `
-  SELECT 
-    t1.*,
-    b.broker_name,
-    b.credentials
+      `
+      SELECT
+        t1.*,
+        b.broker_name,
+        b.credentials,
+        d.multiplier
 
-  FROM real_trade_groups t1
+      FROM real_trade_groups t1
 
-  LEFT JOIN broker_accounts b
-    ON t1.broker_id::uuid = b.id
+      INNER JOIN deployments d
+        ON d.user_id = t1.user_id::uuid
+        AND d.strategy_id = t1.strategy_id::uuid
+        AND d.broker_account_id = t1.broker_id::uuid
+        AND d.status = 'ACTIVE'
 
-  WHERE t1.user_id = $1
-    AND t1.strategy_id = $2
-    AND t1.broker_id = $3
-    AND t1.trade_date = $4
-    AND t1.event_type = 'ENTRY'
+        -- Only today's deployment (IST)
+        AND d.deployed_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
+            BETWEEN date_trunc('day', now() AT TIME ZONE 'Asia/Kolkata')
+            AND date_trunc('day', now() AT TIME ZONE 'Asia/Kolkata')
+                + interval '1 day'
+                - interval '1 second'
 
-    AND NOT EXISTS (
-      SELECT 1
-      FROM real_trade_groups t2
-      WHERE t2.user_id = t1.user_id
-        AND t2.strategy_id = t1.strategy_id
-        AND t2.broker_id = t1.broker_id
-        AND t2.trade_date = t1.trade_date
-        AND t2.symbol = t1.symbol
-        AND t2.leg_name = t1.leg_name
-        AND t2.event_type = 'EXIT'
-        AND t2.timestamp > t1.timestamp
-    )
+      LEFT JOIN broker_accounts b
+        ON b.id = t1.broker_id::uuid
 
-  ORDER BY t1.timestamp DESC
-  `,
-  [user_id, strategy_id, broker_id, date]
-);
+      WHERE t1.user_id = $1
+        AND t1.strategy_id = $2
+        AND t1.broker_id = $3
+        AND t1.trade_date = $4
+        AND t1.event_type = 'ENTRY'
+
+        AND NOT EXISTS (
+          SELECT 1
+          FROM real_trade_groups t2
+          WHERE t2.user_id = t1.user_id
+            AND t2.strategy_id = t1.strategy_id
+            AND t2.broker_id = t1.broker_id
+            AND t2.trade_date = t1.trade_date
+            AND t2.symbol = t1.symbol
+            AND t2.leg_name = t1.leg_name
+            AND t2.event_type = 'EXIT'
+            AND t2.timestamp > t1.timestamp
+        )
+
+      ORDER BY t1.timestamp ASC
+      `,
+      [
+        user_id,
+        strategy_id,
+        broker_id,
+        date
+      ]
+    );
+
     res.json(result.rows);
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to fetch open trades" });
+    console.error("getOpenTrades:", err);
+
+    res.status(500).json({
+      error: "Failed to fetch open trades",
+    });
   }
 };
 
