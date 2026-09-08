@@ -429,7 +429,7 @@ await pool.query(`
   is_active BOOLEAN DEFAULT true,
   expires_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+  );
   `)
 
   await pool.query(`
@@ -449,8 +449,8 @@ await pool.query(`
     title TEXT NOT NULL,
     url TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-      `)
+    );
+    `)
 
       await pool.query(
         `
@@ -524,21 +524,29 @@ await pool.query(`
     created_at TIMESTAMP DEFAULT NOW(),
 
     UNIQUE(trade_date, symbol)
-);
+  );
         `)
 
-      await pool.query(`
-          CREATE TABLE IF NOT EXISTS tokenlogs (
-          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-          user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-          previous_tokens INTEGER NOT NULL,
-          updated_tokens INTEGER NOT NULL,
-          notes TEXT,
-          createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS tokenlogs (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        previous_tokens INTEGER NOT NULL,
+        updated_tokens INTEGER NOT NULL,
+        notes TEXT,
+        createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
       `)
 
-
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS  expenses_income (
+      id SERIAL PRIMARY KEY,
+    date DATE NOT NULL DEFAULT CURRENT_DATE,
+    type VARCHAR(20) NOT NULL CHECK (type IN ('expense', 'income')),
+    amount NUMERIC(12, 2) NOT NULL,
+    notes TEXT
+    ); `
+    )
     
 
 

@@ -28,6 +28,7 @@ import notification from "./src/modules/notifications/notification.routes.js"
 import stocksRoutes from "./src/modules/optionstocks/stocks.routes.js"
 import tokenlogsRoutes from "./src/modules/tokenlogs/tokenlogs.routes.js"
 import savedStrategyRoutes from "./src/modules/saved_strategies/savedStrategy.routes.js"
+import expenseIncomeRoutes from "./src/modules/expenseandincome/expense.routes.js"
 import "./autoDeploy.job.js"
 
 const app = express();
@@ -101,6 +102,7 @@ app.use('/api/notifications',notification);
 app.use('/api/stocks',stocksRoutes);
 app.use('/api/tokenlogs', tokenlogsRoutes);
 app.use("/api/saved-strategies", savedStrategyRoutes);
+app.use("/api/expense-income", expenseIncomeRoutes);
 app.use("/api/", telemetryRoute);
 
 
