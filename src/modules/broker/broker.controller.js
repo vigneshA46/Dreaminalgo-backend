@@ -2,6 +2,11 @@ import pool from "../../config/db.js";
 import { validateBrokerConnection } from "../../services/brokerValidation/brokerValidator.js";
 import crypto from "crypto";
 import axios from "axios";
+import { generate } from "otplib";
+
+
+
+
 
 /*
   CONNECT BROKER
@@ -788,4 +793,403 @@ export const getAllBrokersWithUsers = async (req, res) => {
     });
   }
 };
- 
+
+
+const ZEBU_BASE_URL = "https://go.mynt.in/NorenWClientTP";
+
+const sha256 = (data) => {
+  return crypto
+    .createHash("sha256")
+    .update(data)
+    .digest("hex");
+};
+
+
+const zebuLogin = async ({
+  uid,
+  password,
+  apiKey,
+  factor2,
+  vendorCode = "ZEBU",
+}) => {
+  try {
+    const pwdHash = sha256(password);
+    const appkeyHash = sha256(`${uid}|${apiKey}`);
+
+    // Generate TOTP
+    const otp = await generate({
+      secret: factor2,
+    });
+
+    console.log("Generated Zebu OTP");
+
+    const loginData = {
+      uid: uid,
+      pwd: pwdHash,
+      factor2: otp,
+      apkversion: "1.0.0",
+      imei: "12345678",
+      vc: uid,
+      appkey: appkeyHash,
+      source: "API",
+    };
+
+    const payload =
+      "jData=" +
+      JSON.stringify(loginData);
+
+    console.log("Zebu QuickAuth payload created:", {
+      uid,
+      vendorCode: uid,
+      hasPasswordHash: !!pwdHash,
+      hasAppKeyHash: !!appkeyHash,
+      hasOtp: !!otp,
+    });
+
+    const response = await axios.post(
+      `${ZEBU_BASE_URL}/QuickAuth`,
+      payload,
+      {
+        headers: {
+          "Content-Type": "application/json",
+        },
+
+        timeout: 10000,
+
+        // Do not throw for Zebu's HTTP error responses
+        validateStatus: () => true,
+
+        // Prevent Axios from transforming the body
+        transformRequest: [
+          (data) => data,
+        ],
+      }
+    );
+
+    console.log(
+      "Zebu QuickAuth HTTP Status:",
+      response.status
+    );
+
+    console.log(
+      "Zebu QuickAuth Response:",
+      response.data
+    );
+
+    const result = response.data;
+
+    if (result.stat !== "Ok") {
+      throw new Error(
+        result.emsg ||
+        "Zebu login failed"
+      );
+    }
+
+    return {
+      jKey: result.susertoken,
+      actid: result.actid,
+    };
+
+  } catch (error) {
+    console.error(
+      "Zebu QuickAuth Error:",
+      error.response?.data ||
+      error.message
+    );
+
+    throw error;
+  }
+};
+
+
+const fetchZebuClientDetails = async ({ uid, actid, jKey }) => {
+  const data = {
+    uid,
+    actid,
+    brkname: "ZEBU",
+  };
+
+  const payload =
+    "jData=" +
+    JSON.stringify(data) +
+    "&jKey=" +
+    jKey;
+
+  const response = await fetch(
+    `${ZEBU_BASE_URL}/ClientDetails`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: payload,
+    }
+  );
+
+  const result = await response.json();
+
+  console.log("Zebu ClientDetails HTTP Status:", response.status);
+  console.log("Zebu ClientDetails Response:", result);
+
+  return result;
+};
+
+
+const fetchZebuLimits = async ({ uid, actid, jKey }) => {
+  const data = {
+    uid,
+    actid,
+  };
+
+  const payload =
+    "jData=" +
+    JSON.stringify(data) +
+    "&jKey=" +
+    jKey;
+
+  const response = await fetch(
+    `${ZEBU_BASE_URL}/Limits`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: payload,
+    }
+  );
+
+  const result = await response.json();
+
+  console.log("Zebu Limits HTTP Status:", response.status);
+  console.log("Zebu Limits Response:", result);
+
+  return result;
+};
+
+
+
+
+export const getZebuMargin = async (req, res) => {
+  try {
+    const {
+      uid,
+      actid,
+      jKey,
+      password,
+      apiKey,
+      factor2,
+      vendorCode,
+    } = req.body;
+
+    if (!uid) {
+      return res.status(400).json({
+        success: false,
+        error: "uid is required",
+      });
+    }
+
+    if (!password || !apiKey || !factor2) {
+      return res.status(400).json({
+        success: false,
+        error:
+          "password, apiKey and factor2 are required",
+      });
+    }
+
+    let currentJKey = jKey;
+    let currentActid = actid || uid;
+
+    /*
+     * -----------------------------------------
+     * 1. Try existing session
+     * -----------------------------------------
+     */
+
+    if (currentJKey) {
+      console.log("Trying existing Zebu session...");
+
+      const result = await fetchZebuLimits({
+        uid,
+        actid: currentActid,
+        jKey: currentJKey,
+      });
+
+      if (result.stat === "Ok") {
+        console.log(
+          "Existing Zebu session is valid."
+        );
+
+        return res.status(200).json({
+          success: true,
+          sessionRefreshed: false,
+
+          availableMargin: Number(
+            result.cash || 0
+          ),
+
+          margin: {
+            cash: Number(result.cash || 0),
+            payin: Number(result.payin || 0),
+            payout: Number(result.payout || 0),
+            collateral: Number(
+              result.collateral || 0
+            ),
+
+            marginUsed: Number(
+              result.marginused || 0
+            ),
+
+            span: Number(result.span || 0),
+            exposure: Number(result.expo || 0),
+            premium: Number(
+              result.premium || 0
+            ),
+
+            realizedPnl: Number(
+              result.rpnl || 0
+            ),
+
+            unrealizedPnl: Number(
+              result.unmtom || 0
+            ),
+
+            pendingOrderValue: Number(
+              result.pendordval || 0
+            ),
+
+            turnover: Number(
+              result.turnover || 0
+            ),
+          },
+        });
+      }
+
+      console.log(
+        "Existing Zebu session invalid:",
+        result.emsg
+      );
+    }
+
+    /*
+     * -----------------------------------------
+     * 2. Login again
+     * -----------------------------------------
+     */
+
+    console.log(
+      "Refreshing Zebu session..."
+    );
+
+    const loginResult = await zebuLogin({
+      uid,
+      password,
+      apiKey,
+      factor2,
+      vendorCode: uid,
+    });
+
+    currentJKey = loginResult.jKey;
+    currentActid = loginResult.actid;
+
+    /*
+     * -----------------------------------------
+     * 3. Retry Limits
+     * -----------------------------------------
+     */
+
+    console.log(
+      "Fetching Zebu limits with fresh session..."
+    );
+
+    const result = await fetchZebuLimits({
+      uid,
+      actid: currentActid,
+      jKey: currentJKey,
+    });
+
+    if (result.stat !== "Ok") {
+      console.error(
+        "Zebu Limits failed after login:",
+        result
+      );
+
+      return res.status(400).json({
+        success: false,
+        error:
+          result.emsg ||
+          "Failed to fetch Zebu margin",
+      });
+    }
+
+    /*
+     * -----------------------------------------
+     * 4. Success
+     * -----------------------------------------
+     */
+
+    return res.status(200).json({
+      success: true,
+      sessionRefreshed: true,
+
+      // Fresh session information
+      session: {
+        jKey: currentJKey,
+        actid: currentActid,
+      },
+
+      availableMargin: Number(
+        result.cash || 0
+      ),
+
+      margin: {
+        cash: Number(result.cash || 0),
+        payin: Number(result.payin || 0),
+        payout: Number(result.payout || 0),
+        collateral: Number(
+          result.collateral || 0
+        ),
+
+        marginUsed: Number(
+          result.marginused || 0
+        ),
+
+        span: Number(result.span || 0),
+        exposure: Number(result.expo || 0),
+        premium: Number(
+          result.premium || 0
+        ),
+
+        realizedPnl: Number(
+          result.rpnl || 0
+        ),
+
+        unrealizedPnl: Number(
+          result.unmtom || 0
+        ),
+
+        pendingOrderValue: Number(
+          result.pendordval || 0
+        ),
+
+        turnover: Number(
+          result.turnover || 0
+        ),
+      },
+    });
+
+  } catch (error) {
+    console.error(
+      "Zebu Margin Error:",
+      error.response?.data ||
+      error.message
+    );
+
+    return res.status(500).json({
+      success: false,
+      error:
+        error.response?.data?.emsg ||
+        error.message ||
+        "Failed to fetch Zebu margin",
+    });
+  }
+};

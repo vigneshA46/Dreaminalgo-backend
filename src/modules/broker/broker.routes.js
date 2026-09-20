@@ -23,10 +23,19 @@ router.get(
 );
 
 router.post(
+  "/zebumynt/margin",
+  authenticate,
+  brokerController.getZebuMargin
+);
+
+router.post(
   "/alice/callback",
   authenticate,
+  authorize("superadmin", "admin"),
   brokerController.aliceCallback
 );
+
+
 
 router.get("/flattrade/callback", authenticate, brokerController.flattradeCallback);
 
