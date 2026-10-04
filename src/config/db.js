@@ -548,6 +548,96 @@ await pool.query(`
     ); `
     )
     
+    await pool.query(`
+  CREATE TABLE IF NOT EXISTS exit_monitors (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    user_id UUID NOT NULL
+      REFERENCES users(id)
+      ON DELETE CASCADE,
+
+    broker_account_id UUID NOT NULL
+      REFERENCES broker_accounts(id)
+      ON DELETE CASCADE,
+
+    symbol TEXT NOT NULL,
+    security_id TEXT,
+
+    index_name TEXT,
+    index_security_id TEXT,
+
+    option_type TEXT
+      CHECK (option_type IN ('CE', 'PE')),
+
+    strike TEXT,
+
+    quantity INTEGER NOT NULL
+      CHECK (quantity > 0),
+
+    timeframe INTEGER NOT NULL
+      CHECK (timeframe > 0),
+
+    indicator TEXT NOT NULL
+      CHECK (indicator IN ('EMA9', 'EMA20', 'PARABOLIC_SAR')),
+
+    indicator_period INTEGER,
+
+    tracking_source TEXT NOT NULL
+      CHECK (tracking_source IN ('INDEX', 'OPTION')),
+
+    entry_price NUMERIC(12, 2),
+
+    entry_trade_id UUID,
+
+    exit_trade_id UUID,
+
+    status TEXT NOT NULL DEFAULT 'ACTIVE'
+      CHECK (
+        status IN (
+          'ACTIVE',
+          'EXITED',
+          'STOPPED',
+          'FAILED'
+        )
+      ),
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    exited_at TIMESTAMPTZ
+  );
+`);
+
+
+await pool.query(`
+  CREATE TABLE IF NOT EXISTS exit_monitor_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    exit_monitor_id UUID NOT NULL
+      REFERENCES exit_monitors(id)
+      ON DELETE CASCADE,
+
+    event_type TEXT NOT NULL
+      CHECK (
+        event_type IN (
+          'STARTED',
+          'CANDLE',
+          'SIGNAL',
+          'EXIT',
+          'ERROR'
+        )
+      ),
+
+    candle_time TIMESTAMPTZ,
+
+    indicator_value NUMERIC(12, 4),
+
+    candle_close NUMERIC(12, 4),
+
+    message TEXT,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+`);
 
 
 
