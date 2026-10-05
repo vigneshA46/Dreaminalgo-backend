@@ -1,7 +1,7 @@
 import { Router } from "express";
 
 import authenticate from "../../middlewares/authenticate.js";
-import authorize from "../../middlewares/authorize.js";
+import requireCustomExit from "../../middlewares/requireCustomExit.js";
 
 import * as exitMonitorController from "./exitMonitor.controller.js";
 
@@ -16,7 +16,7 @@ const router = Router();
 router.post(
   "/",
   authenticate,
-  authorize,
+  requireCustomExit,
   exitMonitorController.createExitMonitor
 );
 
@@ -25,7 +25,7 @@ router.post(
 router.get(
   "/",
   authenticate,
-  authorize,
+  requireCustomExit,
   exitMonitorController.getUserExitMonitors
 );
 
@@ -34,7 +34,7 @@ router.get(
 router.get(
   "/:id",
   authenticate,
-  authorize,
+  requireCustomExit,
   exitMonitorController.getExitMonitor
 );
 
@@ -43,7 +43,7 @@ router.get(
 router.post(
   "/:id/stop",
   authenticate,
-  authorize,
+  requireCustomExit,
   exitMonitorController.stopExitMonitor
 );
 
@@ -52,7 +52,7 @@ router.post(
 router.get(
   "/:id/logs",
   authenticate,
-  authorize,
+  requireCustomExit,
   exitMonitorController.getExitMonitorLogs
 );
 

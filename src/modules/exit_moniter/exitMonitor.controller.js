@@ -8,6 +8,16 @@ import axios from "axios";
 const PYTHON_ENGINE_URL =
   process.env.PYTHON_EXIT_ENGINE_URL || "http://localhost:8000";
 
+/* Shared secret between Express and the Python exit engine (both directions) */
+const EXIT_ENGINE_SECRET = process.env.EXIT_ENGINE_SECRET || "";
+
+const pythonHeaders = {
+  "x-exit-engine-secret": EXIT_ENGINE_SECRET,
+};
+
+/* Only Zebu is supported by the Python exit engine */
+const SUPPORTED_BROKERS = ["zebumynt"];
+
 
 /* =========================================================
    1. CREATE / START EXIT MONITOR
@@ -52,6 +62,36 @@ export const createExitMonitor = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Required exit monitor fields are missing",
+      });
+    }
+
+    /* -----------------------------------------
+       BROKER ACCOUNT (must belong to the user)
+    ----------------------------------------- */
+
+    const brokerResult = await pool.query(
+      `
+      SELECT broker_name, credentials
+      FROM broker_accounts
+      WHERE id = $1
+        AND user_id = $2
+      `,
+      [broker_account_id, user_id]
+    );
+
+    if (brokerResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Broker account not found",
+      });
+    }
+
+    const { broker_name, credentials } = brokerResult.rows[0];
+
+    if (!SUPPORTED_BROKERS.includes(broker_name)) {
+      return res.status(400).json({
+        success: false,
+        message: `Exit monitor is not supported for broker ${broker_name}`,
       });
     }
 
@@ -130,33 +170,49 @@ export const createExitMonitor = async (req, res) => {
        TRIGGER PYTHON ENGINE
     ----------------------------------------- */
 
+    let engine;
+
     try {
-      await axios.post(
+      const engineResponse = await axios.post(
         `${PYTHON_ENGINE_URL}/exit-monitor/start`,
         {
           monitor_id: monitor.id,
           user_id,
           broker_account_id,
+          broker_name,
+          credentials,
           symbol,
-          security_id,
-          index_name,
-          index_security_id,
+          security_id: security_id || undefined,
+          index_name: index_name || undefined,
+          index_security_id: index_security_id || undefined,
           option_type,
           strike: String(strike),
           quantity,
           timeframe,
           indicator,
-          indicator_period,
+          indicator_period: indicator_period || undefined,
           tracking_source,
-          entry_price,
-          entry_trade_id,
+          entry_price: entry_price || undefined,
+          entry_trade_id: entry_trade_id || undefined,
+        },
+        {
+          headers: pythonHeaders,
+          timeout: 30000, // includes indicator warm-up from Dhan history
         }
       );
+
+      engine = engineResponse.data;
     } catch (pythonError) {
       console.error(
         "Python Exit Engine Start Error:",
         pythonError.response?.data || pythonError.message
       );
+
+      /* Python returns 400 with a readable reason (bad strike, lot size ...) */
+      const engineReason =
+        typeof pythonError.response?.data?.detail === "string"
+          ? pythonError.response.data.detail
+          : null;
 
       /* -----------------------------------------
          PYTHON FAILED → MARK MONITOR FAILED
@@ -182,15 +238,45 @@ export const createExitMonitor = async (req, res) => {
         `,
         [
           monitor.id,
-          "Failed to start Python exit engine",
+          engineReason
+            ? `Failed to start Python exit engine: ${engineReason}`
+            : "Failed to start Python exit engine",
         ]
       );
 
-      return res.status(500).json({
+      return res.status(pythonError.response?.status === 400 ? 400 : 500).json({
         success: false,
-        message: "Exit monitor created but Python engine failed to start",
+        message: engineReason || "Exit monitor created but Python engine failed to start",
         monitor_id: monitor.id,
       });
+    }
+
+    /* -----------------------------------------
+       SAVE RESOLVED OPTION (Python resolves the current expiry contract)
+    ----------------------------------------- */
+
+    const updated = await pool.query(
+      `
+      UPDATE exit_monitors
+      SET security_id = $2
+      WHERE id = $1
+      RETURNING *
+      `,
+      [monitor.id, engine.security_id]
+    );
+
+    if (engine.warning) {
+      await pool.query(
+        `
+        INSERT INTO exit_monitor_logs (
+          exit_monitor_id,
+          event_type,
+          message
+        )
+        VALUES ($1, 'SIGNAL', $2)
+        `,
+        [monitor.id, engine.warning]
+      );
     }
 
     /* -----------------------------------------
@@ -200,7 +286,10 @@ export const createExitMonitor = async (req, res) => {
     return res.status(201).json({
       success: true,
       message: "Exit monitor started successfully",
-      monitor,
+      monitor: updated.rows[0],
+      tracking_symbol: engine.symbol,
+      indicator_value: engine.indicator_value,
+      warning: engine.warning,
     });
   } catch (error) {
     console.error("Create Exit Monitor Error:", error);
@@ -336,7 +425,9 @@ export const stopExitMonitor = async (req, res) => {
 
     try {
       await axios.post(
-        `${PYTHON_ENGINE_URL}/exit-monitor/${id}/stop`
+        `${PYTHON_ENGINE_URL}/exit-monitor/${id}/stop`,
+        {},
+        { headers: pythonHeaders, timeout: 10000 }
       );
     } catch (pythonError) {
       console.error(
@@ -463,6 +554,20 @@ export const getExitMonitorLogs = async (req, res) => {
 
 export const handleExitMonitorExit = async (req, res) => {
   try {
+    /* -----------------------------------------
+       ONLY THE PYTHON ENGINE MAY CALL THIS
+    ----------------------------------------- */
+
+    if (
+      !EXIT_ENGINE_SECRET ||
+      req.headers["x-exit-engine-secret"] !== EXIT_ENGINE_SECRET
+    ) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
     const { id } = req.params;
 
     const {

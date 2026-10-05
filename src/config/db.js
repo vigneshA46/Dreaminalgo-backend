@@ -31,6 +31,7 @@ export const initDB = async () => {
     auth_provider VARCHAR(20) NOT NULL DEFAULT 'local',
     remarks TEXT,
     status TEXT,
+    iscustomexit BOOLEAN NOT NULL DEFAULT false,
     createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updatedat TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   );

@@ -42,6 +42,49 @@ async (req, res) => {
 );
 
 
+/* Activate / deactivate custom exit feature for a user
+   body: { user_id, action: "activate" | "deactivate" } */
+router.patch(
+  '/custom-exit',
+  authenticate,
+  authorize('superadmin'),
+  async (req, res) => {
+    try {
+      const { user_id, action } = req.body;
+
+      if (!user_id || !['activate', 'deactivate'].includes(action)) {
+        return res.status(400).json({
+          success: false,
+          message: 'user_id and action ("activate" or "deactivate") are required',
+        });
+      }
+
+      const user = await userService.setCustomExit(user_id, action === 'activate');
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found',
+        });
+      }
+
+      res.json({
+        success: true,
+        message: `Custom exit ${action}d`,
+        user,
+      });
+    } catch (error) {
+      console.error('Set Custom Exit Error:', error);
+
+      res.status(500).json({
+        success: false,
+        message: 'Failed to update custom exit',
+      });
+    }
+  }
+);
+
+
 router.get(
   '/:id',
   authenticate,

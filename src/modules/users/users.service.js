@@ -5,7 +5,7 @@ import bcrypt from 'bcrypt';
 /* Get own profile */
 export const getMe = async (userId) => {
   const { rows } = await pool.query(
-    'SELECT id, email, fullname, role, isactive, createdat, tokens FROM users WHERE id = $1',
+    'SELECT id, email, fullname, role, isactive, createdat, tokens, iscustomexit FROM users WHERE id = $1',
     [userId]
   );
   return rows[0];
@@ -33,7 +33,7 @@ export const updateMe = async (userId, data) => {
 /* Admin: get all users */
 export const getAllUsers = async () => {
   const { rows } = await pool.query(
-    `SELECT id, email, fullname, role, isactive, createdat, tokens, mobile_number, passwordhash , status, remarks
+    `SELECT id, email, fullname, role, isactive, createdat, tokens, mobile_number, passwordhash , status, remarks, iscustomexit
      FROM users 
      ORDER BY createdat DESC`
   );
@@ -43,9 +43,24 @@ export const getAllUsers = async () => {
 /* Admin: get single user */
 export const getUserById = async (id) => {
   const { rows } = await pool.query(
-    'SELECT id, email, fullname, role, isactive, tokens , mobile_number FROM users WHERE id = $1',
+    'SELECT id, email, fullname, role, isactive, tokens , mobile_number, iscustomexit FROM users WHERE id = $1',
     [id]
   );
+  return rows[0];
+};
+
+
+/* Admin: activate / deactivate custom exit feature */
+export const setCustomExit = async (userId, enabled) => {
+  const { rows } = await pool.query(
+    `UPDATE users
+     SET iscustomexit = $1,
+         updatedat = NOW()
+     WHERE id = $2
+     RETURNING id, email, fullname, iscustomexit`,
+    [enabled, userId]
+  );
+
   return rows[0];
 };
 
