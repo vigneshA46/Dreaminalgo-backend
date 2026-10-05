@@ -30,6 +30,15 @@ router.get(
 );
 
 
+/* Monitor History For A Day (must be above "/:id") */
+router.get(
+  "/history",
+  authenticate,
+  requireCustomExit,
+  exitMonitorController.getExitMonitorHistory
+);
+
+
 /* Get Single Exit Monitor */
 router.get(
   "/:id",

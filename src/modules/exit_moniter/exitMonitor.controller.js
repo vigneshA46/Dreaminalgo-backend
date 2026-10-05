@@ -338,6 +338,71 @@ export const getUserExitMonitors = async (req, res) => {
 
 
 /* =========================================================
+   2b. MONITOR HISTORY FOR A DAY (all statuses)
+   GET /api/exitmoniter/history?date=YYYY-MM-DD&status=FAILED
+   date defaults to today (IST), status is optional
+   ========================================================= */
+
+const MONITOR_STATUSES = ["ACTIVE", "EXITED", "STOPPED", "FAILED"];
+
+export const getExitMonitorHistory = async (req, res) => {
+  try {
+    const user_id = req.user.id;
+    const { date, status } = req.query;
+
+    if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({
+        success: false,
+        message: "date must be in YYYY-MM-DD format",
+      });
+    }
+
+    if (status && !MONITOR_STATUSES.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: `status must be one of ${MONITOR_STATUSES.join(", ")}`,
+      });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT
+        m.*,
+        l.event_type AS last_event,
+        l.message AS last_message
+      FROM exit_monitors m
+      LEFT JOIN LATERAL (
+        SELECT event_type, message
+        FROM exit_monitor_logs
+        WHERE exit_monitor_id = m.id
+        ORDER BY created_at DESC
+        LIMIT 1
+      ) l ON true
+      WHERE m.user_id = $1
+        AND (m.created_at AT TIME ZONE 'Asia/Kolkata')::date =
+            COALESCE($2::date, (NOW() AT TIME ZONE 'Asia/Kolkata')::date)
+        AND ($3::text IS NULL OR m.status = $3)
+      ORDER BY m.created_at DESC
+      `,
+      [user_id, date || null, status || null]
+    );
+
+    return res.json({
+      success: true,
+      monitors: result.rows,
+    });
+  } catch (error) {
+    console.error("Get Exit Monitor History Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch exit monitor history",
+    });
+  }
+};
+
+
+/* =========================================================
    3. GET SINGLE MONITOR
    GET /api/exit-monitor/:id
    ========================================================= */
