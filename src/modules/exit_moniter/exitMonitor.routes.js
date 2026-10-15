@@ -30,6 +30,13 @@ router.get(
 );
 
 
+/* Python engine: ACTIVE monitors for restart recovery (must be above "/:id") */
+router.get(
+  "/engine/active",
+  exitMonitorController.getEngineActiveMonitors
+);
+
+
 /* Monitor History For A Day (must be above "/:id") */
 router.get(
   "/history",
@@ -69,6 +76,13 @@ router.get(
 /* =========================================================
    PYTHON → EXPRESS
    ========================================================= */
+
+/* Python closes a monitor (auto-close time / restart failure) */
+router.post(
+  "/:id/engine-close",
+  exitMonitorController.closeMonitorFromEngine
+);
+
 
 /* Python reports that exit condition was triggered */
 router.post(

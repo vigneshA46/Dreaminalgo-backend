@@ -716,3 +716,128 @@ export const handleExitMonitorExit = async (req, res) => {
   }
 };
  
+
+
+/* =========================================================
+   PYTHON ENGINE ONLY (x-exit-engine-secret)
+   ========================================================= */
+
+const isEngineRequest = (req) =>
+  Boolean(EXIT_ENGINE_SECRET) &&
+  req.headers["x-exit-engine-secret"] === EXIT_ENGINE_SECRET;
+
+
+/* =========================================================
+   7. ACTIVE MONITORS FOR ENGINE RESTART RECOVERY
+   GET /api/exitmoniter/engine/active
+   ========================================================= */
+
+export const getEngineActiveMonitors = async (req, res) => {
+  try {
+    if (!isEngineRequest(req)) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT
+        m.*,
+        b.broker_name,
+        b.credentials
+      FROM exit_monitors m
+      JOIN broker_accounts b
+        ON b.id = m.broker_account_id
+      WHERE m.status = 'ACTIVE'
+      ORDER BY m.created_at ASC
+      `
+    );
+
+    return res.json({
+      success: true,
+      monitors: result.rows,
+    });
+  } catch (error) {
+    console.error("Get Engine Active Monitors Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch active monitors",
+    });
+  }
+};
+
+
+/* =========================================================
+   8. ENGINE CLOSES A MONITOR (auto-close time / restart failure)
+   POST /api/exitmoniter/:id/engine-close
+   body: { status: "STOPPED" | "FAILED", message }
+   ========================================================= */
+
+export const closeMonitorFromEngine = async (req, res) => {
+  try {
+    if (!isEngineRequest(req)) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
+    const { id } = req.params;
+    const { status, message } = req.body;
+
+    if (!["STOPPED", "FAILED"].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: "status must be STOPPED or FAILED",
+      });
+    }
+
+    /* Only close monitors that are still ACTIVE (an exit may have won the race) */
+    const result = await pool.query(
+      `
+      UPDATE exit_monitors
+      SET status = $2
+      WHERE id = $1
+        AND status = 'ACTIVE'
+      RETURNING *
+      `,
+      [id, status]
+    );
+
+    if (result.rows.length === 0) {
+      return res.json({
+        success: true,
+        closed: false,
+        message: "Monitor was not active",
+      });
+    }
+
+    await pool.query(
+      `
+      INSERT INTO exit_monitor_logs (
+        exit_monitor_id,
+        event_type,
+        message
+      )
+      VALUES ($1, 'ERROR', $2)
+      `,
+      [id, message || `Exit monitor ${status.toLowerCase()} by engine`]
+    );
+
+    return res.json({
+      success: true,
+      closed: true,
+      monitor: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Close Monitor From Engine Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to close exit monitor",
+    });
+  }
+};

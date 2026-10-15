@@ -5,7 +5,7 @@ import { initDB } from "./src/config/db.js";
 import http from "http";
 import { initSocket } from "./src/modules/websocket/socketServer.js";
 
-const PORT = process.env.PORT || 5001;
+const PORT = process.env.PORT || 5000;
 
 (async () => {
   await initDB();
