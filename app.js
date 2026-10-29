@@ -30,6 +30,7 @@ import tokenlogsRoutes from "./src/modules/tokenlogs/tokenlogs.routes.js"
 import savedStrategyRoutes from "./src/modules/saved_strategies/savedStrategy.routes.js"
 import expenseIncomeRoutes from "./src/modules/expenseandincome/expense.routes.js"
 import exitmoniterRoutes from "./src/modules/exit_moniter/exitMonitor.routes.js"
+import backtestRoutes from "./src/modules/backtest/backtest.routes.js"
 import "./autoDeploy.job.js"
 
 const app = express();
@@ -105,6 +106,7 @@ app.use('/api/tokenlogs', tokenlogsRoutes);
 app.use("/api/saved-strategies", savedStrategyRoutes);
 app.use("/api/expense-income", expenseIncomeRoutes);
 app.use("/api/exitmoniter", exitmoniterRoutes);
+app.use("/api/backtest", backtestRoutes);
 app.use("/api/", telemetryRoute);
 
 

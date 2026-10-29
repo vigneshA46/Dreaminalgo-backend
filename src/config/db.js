@@ -316,9 +316,16 @@ await pool.query(`
         leg VARCHAR(2) CHECK (leg IN ('CE','PE')) NOT NULL,
         symbol TEXT NOT NULL,
         strike_price NUMERIC NOT NULL,
+        token TEXT,
         date DATE NOT NULL,
-        pnl NUMERIC DEFAULT 0
+        pnl NUMERIC DEFAULT 0,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
+    `);
+
+    await pool.query(`
+      ALTER TABLE trade_legs
+      ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
     `);
 
     

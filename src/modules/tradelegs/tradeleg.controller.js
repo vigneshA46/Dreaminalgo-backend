@@ -1,5 +1,8 @@
 import pool from "../../config/db.js";
 
+/* Strategies that get every leg for the day instead of one leg per token */
+const ALL_LEGS_STRATEGY_IDS = ["4f62a290-efc7-4ed5-889d-0e10d1ed6a31"];
+
 /* CREATE LEG */
 export const createLeg = async (req, res) => {
   try {
@@ -201,16 +204,23 @@ export const getStrategyDetailedPnl = async (req, res) => {
     /* ------------------------ -----------------
        1. GET LEGS
     ----------------------------------------- */
-    const legsResult = await pool.query(
+    const legsQuery = ALL_LEGS_STRATEGY_IDS.includes(strategy_id)
+      ? `
+      SELECT *
+      FROM trade_legs
+      WHERE startergy_id = $1
+      AND date = $2
+      ORDER BY created_at ASC
       `
+      : `
       SELECT DISTINCT ON (token) *
       FROM trade_legs
       WHERE startergy_id = $1
       AND date = $2
       ORDER BY token, date DESC
-      `,
-      [strategy_id, date]
-    );
+      `;
+
+    const legsResult = await pool.query(legsQuery, [strategy_id, date]);
 
     const legs = legsResult.rows;
 
@@ -220,6 +230,9 @@ export const getStrategyDetailedPnl = async (req, res) => {
     const legPnls = {};
 
     for (const leg of legs) {
+
+      // all-legs mode can return the same token more than once
+      if (legPnls[leg.token]) continue;
 
       const pnlResult = await pool.query(
         `
