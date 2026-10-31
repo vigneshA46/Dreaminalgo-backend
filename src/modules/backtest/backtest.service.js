@@ -182,7 +182,8 @@ class DhanData {
         const f = FATAL_DHAN_CODES[code];
         throw new BacktestError(f.message, f.status, { dhanStatus: res.status, dhanError: res.data });
       }
-      if (res.status === 401) {
+      // Dhan also answers a revoked / replaced token with 400 DH-906 "Invalid Token"
+      if (res.status === 401 || (code === "DH-906" && /token/i.test(res.data?.errorMessage || ""))) {
         throw new BacktestError(FATAL_DHAN_CODES["DH-901"].message, 401, { dhanStatus: 401, dhanError: res.data });
       }
       if (res.status === 429 || code === "DH-904") {
@@ -1028,3 +1029,28 @@ export async function runPivotOptionBuyingCumBacktest(input) {
     },
   };
 }
+
+// shared with the other pivot backtests (pivotBuffer.service.js)
+export {
+  round,
+  addDays,
+  isWeekend,
+  dowName,
+  minutesBetween,
+  RunLog,
+  DhanData,
+  DaySim,
+  isExpiryDay,
+  prevDayOhlc,
+  calculatePivots,
+  prevTradingDay,
+  LOTSIZE,
+  TRADE_START,
+  TRADE_END,
+  TARGET_LTP,
+  ROLL_LOWER,
+  ROLL_UPPER,
+  PICK_MIN,
+  PICK_MAX,
+  TICK_EPS,
+};

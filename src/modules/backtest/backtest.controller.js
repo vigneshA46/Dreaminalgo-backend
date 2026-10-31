@@ -1,7 +1,8 @@
 import * as backtestService from "./backtest.service.js";
+import * as pivotBufferService from "./pivotBuffer.service.js";
 
-// POST /api/backtest/pivot_option_buying_cum
-export const pivotOptionBuyingCum = async (req, res) => {
+// same input checks, status codes and error shape for every backtest endpoint
+const runBacktest = (runner) => async (req, res) => {
   let input;
   try {
     input = backtestService.validateBacktestInput(req.body);
@@ -14,7 +15,7 @@ export const pivotOptionBuyingCum = async (req, res) => {
   }
 
   try {
-    const result = await backtestService.runPivotOptionBuyingCumBacktest(input);
+    const result = await runner(input);
     res.status(result.success ? 200 : 502).json(
       result.success ? result : { ...result, message: "Backtest failed for every trading day — see errors / logs" }
     );
@@ -29,3 +30,9 @@ export const pivotOptionBuyingCum = async (req, res) => {
     });
   }
 };
+
+// POST /api/backtest/pivot_option_buying_cum
+export const pivotOptionBuyingCum = runBacktest(backtestService.runPivotOptionBuyingCumBacktest);
+
+// POST /api/backtest/nifty_option_pivot_buffer
+export const niftyOptionPivotBuffer = runBacktest(pivotBufferService.runNiftyOptionPivotBufferBacktest);
