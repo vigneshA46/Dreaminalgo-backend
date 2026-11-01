@@ -1,5 +1,6 @@
 import * as backtestService from "./backtest.service.js";
 import * as pivotBufferService from "./pivotBuffer.service.js";
+import * as pivotFixedTargetService from "./pivotFixedTarget.service.js";
 
 // same input checks, status codes and error shape for every backtest endpoint
 const runBacktest = (runner) => async (req, res) => {
@@ -36,3 +37,6 @@ export const pivotOptionBuyingCum = runBacktest(backtestService.runPivotOptionBu
 
 // POST /api/backtest/nifty_option_pivot_buffer
 export const niftyOptionPivotBuffer = runBacktest(pivotBufferService.runNiftyOptionPivotBufferBacktest);
+
+// POST /api/backtest/nifty_option_pivot_fixed_target
+export const niftyOptionPivotFixedTarget = runBacktest(pivotFixedTargetService.runNiftyOptionPivotFixedTargetBacktest);
