@@ -586,7 +586,7 @@ await pool.query(`
       CHECK (timeframe > 0),
 
     indicator TEXT NOT NULL
-      CHECK (indicator IN ('EMA9', 'EMA20', 'PARABOLIC_SAR')),
+      CHECK (indicator IN ('EMA9', 'EMA20', 'PARABOLIC_SAR', 'HALFTREND')),
 
     indicator_period INTEGER,
 
