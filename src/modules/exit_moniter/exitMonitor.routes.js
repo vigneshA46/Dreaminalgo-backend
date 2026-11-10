@@ -84,6 +84,13 @@ router.post(
 );
 
 
+/* Python saves the trailing SL after it moves (restart recovery) */
+router.post(
+  "/:id/engine-state",
+  exitMonitorController.updateMonitorStateFromEngine
+);
+
+
 /* Python reports that exit condition was triggered */
 router.post(
   "/:id/exit",

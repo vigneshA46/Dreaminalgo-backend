@@ -582,16 +582,39 @@ await pool.query(`
     quantity INTEGER NOT NULL
       CHECK (quantity > 0),
 
-    timeframe INTEGER NOT NULL
+    -- indicator exit (can be switched off; then these three are NULL)
+    indicator_enabled BOOLEAN NOT NULL DEFAULT true,
+
+    timeframe INTEGER
       CHECK (timeframe > 0),
 
-    indicator TEXT NOT NULL
+    indicator TEXT
       CHECK (indicator IN ('EMA9', 'EMA20', 'PARABOLIC_SAR', 'HALFTREND')),
 
     indicator_period INTEGER,
 
-    tracking_source TEXT NOT NULL
+    tracking_source TEXT
       CHECK (tracking_source IN ('INDEX', 'OPTION')),
+
+    -- price exit: one of NONE / FIXED (target and/or SL) / TRAILING
+    price_exit_type TEXT NOT NULL DEFAULT 'NONE'
+      CHECK (price_exit_type IN ('NONE', 'FIXED', 'TRAILING')),
+
+    price_source TEXT
+      CHECK (price_source IN ('INDEX', 'OPTION')),
+
+    target_price NUMERIC(12, 2),
+
+    sl_price NUMERIC(12, 2),
+
+    trailing_start NUMERIC(12, 2),
+
+    trailing_points NUMERIC(12, 2),
+
+    current_sl NUMERIC(12, 2),
+
+    exit_reason TEXT
+      CHECK (exit_reason IN ('INDICATOR', 'TARGET', 'STOP_LOSS', 'TRAILING_SL')),
 
     entry_price NUMERIC(12, 2),
 
@@ -611,7 +634,19 @@ await pool.query(`
 
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-    exited_at TIMESTAMPTZ
+    exited_at TIMESTAMPTZ,
+
+    CONSTRAINT exit_monitors_has_exit_check
+      CHECK (indicator_enabled OR price_exit_type <> 'NONE'),
+
+    CONSTRAINT exit_monitors_indicator_fields_check
+      CHECK (
+        NOT indicator_enabled
+        OR (indicator IS NOT NULL AND timeframe IS NOT NULL AND tracking_source IS NOT NULL)
+      ),
+
+    CONSTRAINT exit_monitors_price_fields_check
+      CHECK (price_exit_type = 'NONE' OR price_source IS NOT NULL)
   );
 `);
 
