@@ -42,6 +42,7 @@ const SL_BUFFER = 8;
 const TICK_ENTRY_POINTS = 12;
 const BASE_LOT = 2;
 const MAX_LOT = 15;
+const SL_PER_LOT_STEP = 2;    // +1 lot on every 2nd stop-loss in a row (2, 2, 3, 3, 4, 4 ...)
 const MAX_LOSS = -13000;
 const LOTSIZE = 65;
 
@@ -345,6 +346,7 @@ class DaySim {
       lot: BASE_LOT, pnl: 0, targetPoints: CUM_TARGET_START_POINTS, ltp: 0,
       tradingDisabled: false, rolling: false, pending: null, lastBar: null,
       lastRollFail: null, strikesUsed: [], maxLot: BASE_LOT,
+      slStreak: 0,              // stop-losses in a row since the last target
     };
   }
 
@@ -496,10 +498,13 @@ class DaySim {
     // lot progression
     if (kind === "TARGET") {
       leg.lot = BASE_LOT;
+      leg.slStreak = 0;
       leg.targetPoints += CUM_TARGET_STEP_POINTS;
       while (leg.targetPoints * LOTSIZE <= leg.pnl) leg.targetPoints += CUM_TARGET_STEP_POINTS;
     } else if (kind === "SL") {
-      leg.lot = Math.min(leg.lot + 1, MAX_LOT);
+      // 1st SL keeps the lot, 2nd SL in a row +1, 3rd keeps, 4th +1 ...
+      leg.slStreak += 1;
+      if (leg.slStreak % SL_PER_LOT_STEP === 0) leg.lot = Math.min(leg.lot + 1, MAX_LOT);
     }
   }
 
@@ -830,7 +835,7 @@ function buildSummary(days) {
   if (wins.length && losses.length) {
     const ratio = (grossWin / wins.length) / (grossLoss / losses.length);
     analysis.push(`Trade win rate is ${Math.round((100 * wins.length) / trades.length)}% with avg win / avg loss ${ratio.toFixed(2)} — ` +
-      `the lot ladder (+1 lot per SL, up to ${MAX_LOT}) is what turns the fewer target hits into profit.`);
+      `the lot ladder (+1 lot on every ${SL_PER_LOT_STEP}nd SL in a row, up to ${MAX_LOT}) is what turns the fewer target hits into profit.`);
   }
   if (mtmDays.length) {
     analysis.push(`The −₹13,000 MTM stop fired on ${mtmDays.length} day(s), ${inr(mtmDays.reduce((s, d) => s + d.dayPnl, 0))} in total — ` +
@@ -1008,6 +1013,7 @@ export async function runPivotOptionBuyingCumBacktest(input) {
       lotSize: LOTSIZE,
       baseLot: BASE_LOT,
       maxLot: MAX_LOT,
+      lotStepEverySl: SL_PER_LOT_STEP,
       targetLtp: TARGET_LTP,
       rollRange: [ROLL_LOWER, ROLL_UPPER],
       pickRange: [PICK_MIN, PICK_MAX],
