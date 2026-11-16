@@ -1,6 +1,6 @@
 /**
  * Day loop + report shared by the 1-lot pivot backtests
- * (pivotBuffer.service.js, pivotFixedTarget.service.js).
+ * (pivotBuffer.service.js, pivotFixedTarget.service.js, levelBreakout.service.js).
  *
  * A strategy only provides its DaySim subclass and a few analysis lines:
  *   runDays(input, SimClass)  -> { days, errors, logs, meta }
@@ -120,6 +120,8 @@ export async function runDays(input, SimClass, label) {
       closeReason: sim.closeReason || "-",
       trades: sim.trades,
     };
+    // strategy-specific per-day fields (levels, ATM ...)
+    if (sim.dayExtras) Object.assign(out, sim.dayExtras());
     if (input.includeEvents) out.events = sim.events;
     days.push(out);
     log.info(`CE ${ce.pnl} | PE ${pe.pnl} | day ${dayPnl} | trades ${sim.trades.length}`, day);

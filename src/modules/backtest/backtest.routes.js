@@ -1,5 +1,5 @@
 import express from "express";
-import { pivotOptionBuyingCum, niftyOptionPivotBuffer, niftyOptionPivotFixedTarget } from "./backtest.controller.js";
+import { pivotOptionBuyingCum, niftyOptionPivotBuffer, niftyOptionPivotFixedTarget, niftyOptionLevelBreakout } from "./backtest.controller.js";
 
 const router = express.Router();
 
@@ -7,5 +7,6 @@ const router = express.Router();
 router.post("/pivot_option_buying_cum", pivotOptionBuyingCum);
 router.post("/nifty_option_pivot_buffer", niftyOptionPivotBuffer);
 router.post("/nifty_option_pivot_fixed_target", niftyOptionPivotFixedTarget);
+router.post("/nifty_option_level_breakout", niftyOptionLevelBreakout);
 
 export default router;
