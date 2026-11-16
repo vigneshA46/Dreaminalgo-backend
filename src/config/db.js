@@ -696,6 +696,46 @@ UNIQUE (user_id, strategy_id, broker_account_id, type);
 ) */
 
 
+    /* BACKTEST: strategies that have a backtest engine (rows seeded from backtest.registry.js) */
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS backtest_strategies (
+        key VARCHAR(100) PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        is_active BOOLEAN NOT NULL DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    /* BACKTEST: which user may backtest which strategy */
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS backtest_strategy_access (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        strategy_key VARCHAR(100) NOT NULL REFERENCES backtest_strategies(key) ON DELETE CASCADE,
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        granted_by UUID REFERENCES admins(id) ON DELETE SET NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (strategy_key, user_id)
+      );
+    `);
+
+    /* BACKTEST: every user run (usage / audit) */
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS backtest_runs (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+        strategy_key VARCHAR(100) NOT NULL,
+        run_date DATE NOT NULL,
+        status VARCHAR(20) NOT NULL,
+        net_pnl NUMERIC,
+        trades INTEGER,
+        error TEXT,
+        duration_sec NUMERIC,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
     console.log("✅ Database connected & tables verified");
   } catch (error) {
     console.error("❌ Database initialization failed", error);
