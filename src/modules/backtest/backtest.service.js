@@ -54,6 +54,7 @@ const MAX_STRIKE_CANDIDATES = 6;
 // =========================
 
 const ROLLING_URL = "https://api.dhan.co/v2/charts/rollingoption";
+const INTRADAY_URL = "https://api.dhan.co/v2/charts/intraday";
 const NIFTY_ID = 13;
 const OFFSETS = Array.from({ length: 21 }, (_, i) => i - 10);
 const CALL_GAP_MS = 220;          // Dhan data API ~5 req/s
@@ -159,13 +160,15 @@ class DhanData {
     this.mem = new Map(); // per request only: a day is downloaded once even if used as "today" and "previous day"
   }
 
-  async post(body) {
+  // rolling option API answers { data: {...} }, the intraday API answers the arrays directly
+  async post(body, url = ROLLING_URL) {
+    const api = url === ROLLING_URL ? "rollingoption" : "intraday";
     for (let attempt = 0; attempt < 6; attempt++) {
       await throttle();
       this.calls += 1;
       let res;
       try {
-        res = await axios.post(ROLLING_URL, body, {
+        res = await axios.post(url, body, {
           headers: this.headers,
           timeout: 30000,
           validateStatus: () => true,
@@ -176,7 +179,7 @@ class DhanData {
         continue;
       }
 
-      if (res.status === 200) return res.data?.data || {};
+      if (res.status === 200) return url === ROLLING_URL ? res.data?.data || {} : res.data || {};
 
       const code = res.data?.errorCode;
       if (FATAL_DHAN_CODES[code]) {
@@ -196,13 +199,37 @@ class DhanData {
         continue;
       }
       const msg = res.data?.errorMessage || JSON.stringify(res.data).slice(0, 200);
-      throw new BacktestError(`Dhan rollingoption ${res.status} ${code || ""}: ${msg}`.trim(), 502, {
+      throw new BacktestError(`Dhan ${api} ${res.status} ${code || ""}: ${msg}`.trim(), 502, {
         dhanStatus: res.status,
         dhanError: res.data,
         request: { strike: body.strike, option: body.drvOptionType, date: body.fromDate, expiryCode: body.expiryCode },
       });
     }
-    throw new BacktestError("Dhan rollingoption: too many retries (rate limit / network)", 503);
+    throw new BacktestError(`Dhan ${api}: too many retries (rate limit / network)`, 503);
+  }
+
+  /** NIFTY index 1-min OHLC for one day: { hhmm: [o, h, l, c] } (Dhan has no 09:15 bar for the index). */
+  async indexDay(day) {
+    const key = `${day}_index`;
+    if (this.mem.has(key)) return this.mem.get(key);
+    const r = await this.post(
+      {
+        securityId: String(NIFTY_ID),
+        exchangeSegment: "IDX_I",
+        instrument: "INDEX",
+        interval: "1",
+        fromDate: `${day} 09:15:00`,
+        toDate: `${day} 15:30:00`,
+      },
+      INTRADAY_URL
+    );
+    const out = {};
+    (r.timestamp || []).forEach((ts, i) => {
+      const t = istParts(ts);
+      if (t.date === day) out[t.hhmm] = [Number(r.open[i]), Number(r.high[i]), Number(r.low[i]), Number(r.close[i])];
+    });
+    this.mem.set(key, out);
+    return out;
   }
 
   async fetchSeries(day, code, offset, opt) {

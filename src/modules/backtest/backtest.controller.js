@@ -2,6 +2,7 @@ import * as backtestService from "./backtest.service.js";
 import * as pivotBufferService from "./pivotBuffer.service.js";
 import * as pivotFixedTargetService from "./pivotFixedTarget.service.js";
 import * as levelBreakoutService from "./levelBreakout.service.js";
+import * as hourlyRangeService from "./hourlyRange.service.js";
 
 // same input checks, status codes and error shape for every backtest endpoint
 const runBacktest = (runner) => async (req, res) => {
@@ -44,3 +45,9 @@ export const niftyOptionPivotFixedTarget = runBacktest(pivotFixedTargetService.r
 
 // POST /api/backtest/nifty_option_level_breakout
 export const niftyOptionLevelBreakout = runBacktest(levelBreakoutService.runNiftyOptionLevelBreakoutBacktest);
+
+// POST /api/backtest/nifty_hourly_range_touch
+export const niftyHourlyRangeTouch = runBacktest(hourlyRangeService.runNiftyHourlyRangeTouchBacktest);
+
+// POST /api/backtest/nifty_hourly_range_touch_1m
+export const niftyHourlyRangeTouch1m = runBacktest(hourlyRangeService.runNiftyHourlyRangeTouch1mBacktest);

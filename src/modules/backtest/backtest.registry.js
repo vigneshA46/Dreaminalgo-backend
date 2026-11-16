@@ -8,6 +8,7 @@ import { runPivotOptionBuyingCumBacktest } from "./backtest.service.js";
 import { runNiftyOptionPivotBufferBacktest } from "./pivotBuffer.service.js";
 import { runNiftyOptionPivotFixedTargetBacktest } from "./pivotFixedTarget.service.js";
 import { runNiftyOptionLevelBreakoutBacktest } from "./levelBreakout.service.js";
+import { runNiftyHourlyRangeTouchBacktest, runNiftyHourlyRangeTouch1mBacktest } from "./hourlyRange.service.js";
 
 export const BACKTEST_STRATEGIES = {
   pivot_option_buying_cum: {
@@ -37,5 +38,19 @@ export const BACKTEST_STRATEGIES = {
       "NIFTY ATM CE + PE. range = prev-day (H − L) × 26.11%, buy above = open + range, targets up to T11. " +
       "3-min close above buy above → 1 lot, SL entry − 20 until T1, then trail on 3-min close below the last target touched.",
     run: runNiftyOptionLevelBreakoutBacktest,
+  },
+  nifty_hourly_range_touch: {
+    title: "nifty_hourly_range_touch",
+    description:
+      "NIFTY hourly High / Low of the first 5 hours, each traded in the next hour. Line touch + 3-min NIFTY close beyond it " +
+      "with avg-price confirmation → ATM CE / PE, 1 lot. SL 3-min close back through the line, cycle limits −₹3,500 / +₹5,000, max 2 entries per cycle.",
+    run: runNiftyHourlyRangeTouchBacktest,
+  },
+  nifty_hourly_range_touch_1m: {
+    title: "nifty_hourly_range_touch_1m",
+    description:
+      "Same as nifty_hourly_range_touch with 1-min NIFTY candles: line touch + 1-min close beyond it with avg-price confirmation → " +
+      "ATM CE / PE, 1 lot. SL 1-min close back through the line, cycle limits −₹3,500 / +₹5,000, max 2 entries per cycle.",
+    run: runNiftyHourlyRangeTouch1mBacktest,
   },
 };
