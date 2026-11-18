@@ -48,6 +48,7 @@ export async function runDays(input, SimClass, label) {
 
     let today;
     let prev;
+    let index = null;
     try {
       const calls0 = dh.calls;
       today = await dh.day(day, 1);
@@ -65,6 +66,7 @@ export async function runDays(input, SimClass, label) {
       // today's nearest contract on the previous day: code 1, or code 2 if that day was an expiry
       const prevCode = isExpiryDay(await dh.day(pday, 1)) ? 2 : 1;
       prev = await dh.day(pday, prevCode);
+      if (SimClass.needsIndex) index = await dh.indexDay(day);
       if (dh.calls > calls0) log.info(`data ready (${dh.calls - calls0} API calls)`, day);
     } catch (e) {
       // token / subscription problems -> nothing else will work, stop the whole run
@@ -81,7 +83,7 @@ export async function runDays(input, SimClass, label) {
 
     let sim;
     try {
-      sim = new SimClass(day, today, prev);
+      sim = new SimClass(day, today, prev, index);
       const err = sim.run();
       if (err) {
         days.push({ ...rec, status: "skipped", message: err });

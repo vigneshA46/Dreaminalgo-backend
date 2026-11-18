@@ -1,5 +1,5 @@
 /**
- * BACKTEST — nifty_option_level_breakout (range levels, 3-min)
+ * BACKTEST — nifty_option_level_breakout (range levels, 5-min)
  *
  * NIFTY CE + PE option buying, two independent legs, one fixed strike all day.
  *   - strike: NIFTY 09:15 one-minute close rounded to the nearest 50 (ATM),
@@ -8,12 +8,12 @@
  *       range        = (prev high - prev low) * 26.11%
  *       buy above    = open + range,   buy target n  = buy above + n * range  (n = 1..11)
  *       sell below   = open - range,   sell target n = sell below - n * range (reference only)
- *   - 3-minute candles built from the 1-min bars (09:15, 09:18, ...)
- *   - entry: 3-min candle closes above buy above -> buy 1 lot at the next tick
+ *   - 5-minute candles built from the 1-min bars (09:15, 09:20, ...)
+ *   - entry: 5-min candle closes above buy above -> buy 1 lot at the next tick
  *   - initial SL: any tick <= entry - 20
  *   - once a tick touches buy target n, the 20-point SL is off and the stop becomes
- *     "3-min candle closes below target n" (moves up to every further target touched)
- *   - after an exit, a 3-min candle must close below buy above before a new entry
+ *     "5-min candle closes below target n" (moves up to every further target touched)
+ *   - after an exit, a 5-min candle must close below buy above before a new entry
  *   - no daily profit / loss limit, everything closed at 15:14
  */
 
@@ -27,10 +27,12 @@ import { runDays, summarize, inr } from "./backtestRunner.js";
 const RANGE_PCT = 0.2611;      // range = previous-day (high - low) * 26.11%
 const TARGET_COUNT = 11;
 const SL_POINTS = 20;          // initial stop below entry (tick)
-const CANDLE_MINUTES = 3;
+const CANDLE_MINUTES = 5;
+const FIRST_ENTRY_PCT = 0.1306; // first entry of a leg needs a close above buy above + 13.06% (sell side: below sell below - 13.06%)
 const STRIKE_STEP = 50;
 const SELECT_TIME = "09:15";   // NIFTY 1-min candle whose close picks the ATM (known at 09:16)
 const LOTS = 1;
+const MIN_PREV_BARS = 300;   // a previous day with fewer 1-min bars than this is treated as missing data
 
 const toMin = (hhmm) => {
   const [h, m] = hhmm.split(":").map(Number);
@@ -49,6 +51,8 @@ function calculateLevels(prevHigh, prevLow, open) {
     range: round(range),
     buyAbove: round(buyAbove),
     buyTargets: Array.from({ length: TARGET_COUNT }, (_, i) => round(buyAbove + (i + 1) * range)),
+    firstBuyAbove: round(buyAbove + buyAbove * FIRST_ENTRY_PCT),
+    firstSellBelow: round(sellBelow - sellBelow * FIRST_ENTRY_PCT),
     sellBelow: round(sellBelow),
     sellTargets: Array.from({ length: TARGET_COUNT }, (_, i) => round(sellBelow - (i + 1) * range)),
   };
@@ -59,8 +63,10 @@ function calculateLevels(prevHigh, prevLow, open) {
 // =========================
 
 class LevelBreakoutDaySim {
-  constructor(day, todayData, prevData) {
+  static needsIndex = true;
+  constructor(day, todayData, prevData, indexBars) {
     this.day = day;
+    this.index = indexBars;  // real NIFTY 1-min candles of today (from the index chart, 09:15 included)
     this.data = todayData;  // nearest expiry, today
     this.prev = prevData;   // SAME contracts, previous trading day
     this.legs = { CE: this.initLeg("CE"), PE: this.initLeg("PE") };
@@ -79,7 +85,8 @@ class LevelBreakoutDaySim {
       pnl: 0, ltp: 0, lot: LOTS,
       position: false, entryPrice: null, entryTime: null, entryReason: null,
       targetIdx: -1,          // highest buy target touched in the open trade (-1 = none)
-      armed: true,            // a new entry is allowed (needs a 3-min close below buy above after an exit)
+      firstDone: false,       // the first entry uses the 13.06% line, later ones the plain buy above
+      armed: true,            // a new entry is allowed (needs a 5-min close below buy above after an exit)
       candle: null, bucket: null,
       tradingDisabled: false,
     };
@@ -100,7 +107,12 @@ class LevelBreakoutDaySim {
   // ---------- selection ----------
 
   select() {
-    const spot = this.data.spot[SELECT_TIME];
+    // ATM from the real NIFTY 09:15 candle close; the options feed's spot is only a logged fallback
+    let spot = this.index?.[SELECT_TIME]?.[3];
+    if (!spot) {
+      spot = this.data.spot[SELECT_TIME];
+      if (spot) this.log("WARN", `NIFTY index ${SELECT_TIME} candle missing, ATM taken from the options feed spot`);
+    }
     if (!spot) return `no NIFTY price at ${SELECT_TIME} to pick the ATM strike`;
     this.spotAtSelect = round(spot);
     this.atm = Math.round(spot / STRIKE_STEP) * STRIKE_STEP;
@@ -110,17 +122,21 @@ class LevelBreakoutDaySim {
       const bars = this.data[side].get(this.atm);
       if (!bars) return `no ${side} ${this.atm} data today`;
       const prevBars = this.prev[side].get(this.atm);
-      if (!prevBars) return `no previous-day data for ${side} ${this.atm}`;
-      const pb = Object.values(prevBars);
-      const firstKey = Object.keys(bars).sort()[0];
-      const open = (bars["09:15"] || bars[firstKey])[0];
+      if (!prevBars) return `no previous-day data for ${side} ${this.atm} (Dhan serves only a narrow strike window for the next expiry on the previous day)`;
+      // previous session only incl. the closing session (09:15-15:39, ends 15:40)
+      const pb = Object.entries(prevBars).filter(([k]) => k >= "09:15" && k <= "15:39").map(([, b]) => b);
+      if (pb.length < MIN_PREV_BARS) {
+        return `previous-day data for ${side} ${this.atm} is incomplete (${pb.length} bars), levels would be wrong`;
+      }
+      if (!bars["09:15"]) return `no ${side} ${this.atm} bar at 09:15, today's open is unknown`;
+      const open = bars["09:15"][0];
 
       leg.strike = this.atm;
       leg.strikesUsed.push(this.atm);
       leg.levels = calculateLevels(Math.max(...pb.map((b) => b[1])), Math.min(...pb.map((b) => b[2])), open);
       const L = leg.levels;
       this.log("SELECT", `${side} ${this.atm} | prev H ${L.prevHigh} L ${L.prevLow} | open ${L.open} | range ${L.range} | ` +
-        `buy above ${L.buyAbove} | T1 ${L.buyTargets[0]} … T11 ${L.buyTargets[TARGET_COUNT - 1]}`, {
+        `buy above ${L.buyAbove} (first entry above ${L.firstBuyAbove}) | T1 ${L.buyTargets[0]} … T11 ${L.buyTargets[TARGET_COUNT - 1]}`, {
         side, strike: this.atm, levels: L,
       });
     }
@@ -135,7 +151,9 @@ class LevelBreakoutDaySim {
     leg.entryTime = this.now;
     leg.targetIdx = -1;
     leg.armed = false;
-    leg.entryReason = `3-min close ${candleClose} > buy above ${leg.levels.buyAbove}`;
+    const line = leg.firstDone ? leg.levels.buyAbove : leg.levels.firstBuyAbove;
+    leg.entryReason = `${CANDLE_MINUTES}-min close ${candleClose} > ${leg.firstDone ? "buy above" : "first-entry line"} ${line}`;
+    leg.firstDone = true;
     this.log("ENTRY", `BUY ${leg.name} ${leg.strike} @ ${price.toFixed(2)} | ${leg.entryReason} | SL ${round(price - SL_POINTS)}`, {
       side: leg.name, strike: leg.strike, price: round(price),
     });
@@ -193,18 +211,18 @@ class LevelBreakoutDaySim {
 
     if (leg.position) {
       if (leg.targetIdx >= 0 && c < L.buyTargets[leg.targetIdx]) {
-        this.exit(leg, ltp, `3-min close ${c} < T${leg.targetIdx + 1} ${L.buyTargets[leg.targetIdx]}`, "TRAIL");
+        this.exit(leg, ltp, `5-min close ${c} < T${leg.targetIdx + 1} ${L.buyTargets[leg.targetIdx]}`, "TRAIL");
       }
       return;
     }
 
     if (!leg.armed && c < L.buyAbove) {
       leg.armed = true;
-      this.log("REARM", `${leg.name} 3-min close ${c} < buy above ${L.buyAbove} -> re-armed`, { side: leg.name });
+      this.log("REARM", `${leg.name} 5-min close ${c} < buy above ${L.buyAbove} -> re-armed`, { side: leg.name });
       return;
     }
 
-    if (leg.armed && c > L.buyAbove && this.now < TRADE_END) this.enter(leg, ltp, c);
+    if (leg.armed && c > (leg.firstDone ? L.buyAbove : L.firstBuyAbove) && this.now < TRADE_END) this.enter(leg, ltp, c);
   }
 
   onTicks(leg, ltp) {
@@ -213,7 +231,7 @@ class LevelBreakoutDaySim {
     // target touches: the stop moves up to the highest target touched
     while (leg.targetIdx + 1 < TARGET_COUNT && ltp >= L.buyTargets[leg.targetIdx + 1] - 1e-9) {
       leg.targetIdx += 1;
-      this.log("TARGET", `${leg.name} touched T${leg.targetIdx + 1} ${L.buyTargets[leg.targetIdx]} -> stop = 3-min close below it`, {
+      this.log("TARGET", `${leg.name} touched T${leg.targetIdx + 1} ${L.buyTargets[leg.targetIdx]} -> stop = 5-min close below it`, {
         side: leg.name, target: leg.targetIdx + 1,
       });
     }
@@ -266,7 +284,7 @@ class LevelBreakoutDaySim {
     const bucket = bucketOf(hhmm);
     let closed = null;
 
-    // the first tick of a new 3-min bucket closes the previous 3-min candle
+    // the first tick of a new 5-min bucket closes the previous 5-min candle
     if (leg.bucket !== bucket) {
       closed = leg.candle;
       leg.bucket = bucket;
@@ -357,8 +375,8 @@ export async function runNiftyOptionLevelBreakoutBacktest(input) {
       targets: TARGET_COUNT,
       candleMinutes: CANDLE_MINUTES,
       initialSlPoints: SL_POINTS,
-      trailing: "after a tick touches buy target n: exit on a 3-min close below target n",
-      rearm: "3-min close below buy above after an exit",
+      trailing: "after a tick touches buy target n: exit on a 5-min close below target n",
+      rearm: "5-min close below buy above after an exit",
       tradeEnd: TRADE_END,
     },
     summary,
