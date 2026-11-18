@@ -60,7 +60,7 @@ export const BACKTEST_STRATEGIES = {
   nifty_hourly_range_touch_custom: {
     title: "nifty_hourly_range_touch_custom",
     description:
-      "NIFTY hourly High / Low touch strategy with your settings: 1 / 3 / 5-min candles, day and cycle SL / profit on or off. " +
+      "NIFTY hourly High / Low touch strategy with your settings: 1 / 3 / 5-min candles, strike (default ITM2), day / cycle SL and profit, per-trade profit. " +
       "Exits on a candle close back through the entry line or when NIFTY touches the cycle's other line, which stays armed for the next entry. No entry limit.",
     run: runNiftyHourlyRangeTouchCustomBacktest,
   },

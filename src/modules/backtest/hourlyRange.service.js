@@ -2,8 +2,8 @@
  * BACKTEST — NIFTY hourly high-low touch & confirmation
  *   nifty_hourly_range_touch     (version 1, 3-min entry candles)
  *   nifty_hourly_range_touch_1m  (version 2, 1-min entry candles) — same rules, candle size differs
- *   nifty_hourly_range_touch_custom — user settings (1 / 3 / 5-min candles, day and cycle SL / profit
- *     on or off with values), no entry limit, and an extra exit: a NIFTY tick touching the cycle's
+ *   nifty_hourly_range_touch_custom — user settings (1 / 3 / 5-min candles, strike ATM / ITM / OTM,
+ *     day and cycle SL / profit and per-trade profit on or off with values), no entry limit, and an extra exit: a NIFTY tick touching the cycle's
  *     OTHER line closes the trade and arms that line for the next entry (same cycle, no fresh touch)
  *
  * Levels and signals come from the NIFTY index chart, trades are NIFTY options.
@@ -55,6 +55,8 @@ const FIXED_RULES = {
   dayMaxProfit: null,
   maxEntries: 2,
   otherLineExit: false,
+  strikeOffset: 0,        // strikes in-the-money from ATM (negative = out-of-the-money)
+  tradeMaxProfit: null,   // per-trade profit exit (rupees)
 };
 const STRIKE_STEP = 50;
 
@@ -63,6 +65,8 @@ const toMin = (hhmm) => {
   return h * 60 + m;
 };
 const toHHMM = (min) => `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
+
+const strikeLabel = (n) => (n === 0 ? "ATM" : n > 0 ? `ITM${n}` : `OTM${-n}`);
 
 // cycle k: range [rangeStart, readyAt) marked at readyAt, trades until windowEnd
 const CYCLE_DEFS = Array.from({ length: CYCLES }, (_, i) => {
@@ -176,6 +180,7 @@ class HourlyRangeDaySim {
       cycle: c.k,
       side: p.side,
       strike: p.strike,
+      strikeType: strikeLabel(this.rules.strikeOffset),
       lot: p.lots,
       quantity: p.lots * LOTSIZE,
       entryTime: p.entryTime,
@@ -247,7 +252,10 @@ class HourlyRangeDaySim {
     else if (c < L && avg < L && avg > c) side = "PE";
     if (!side) return;
 
-    const strike = Math.round(c / STRIKE_STEP) * STRIKE_STEP;
+    // ATM from the signal close, then n strikes in-the-money: CE below ATM, PE above
+    const atm = Math.round(c / STRIKE_STEP) * STRIKE_STEP;
+    const n = this.rules.strikeOffset;
+    const strike = side === "CE" ? atm - n * STRIKE_STEP : atm + n * STRIKE_STEP;
     const bar = this.optionBar(side, strike, m);
     if (!bar) {
       this.log("SKIP", `${side} ${strike} has no option price at ${m}, signal skipped`, { side, strike });
@@ -256,7 +264,7 @@ class HourlyRangeDaySim {
     this.enter(side, strike, bar[0], candle, avg);
   }
 
-  // ---------- option ticks: live money limits (cycle and day) ----------
+  // ---------- option ticks: live money limits (trade, cycle and day) ----------
 
   walkOption(bar) {
     const p = this.pos;
@@ -272,6 +280,7 @@ class HourlyRangeDaySim {
     if (r.dayMaxLoss !== null) lossPrices.push(p.entry + (r.dayMaxLoss - dayRealized) / qty);
     if (r.cycleMaxProfit !== null) profitPrices.push(p.entry + (r.cycleMaxProfit - p.cycle.pnl) / qty);
     if (r.dayMaxProfit !== null) profitPrices.push(p.entry + (r.dayMaxProfit - dayRealized) / qty);
+    if (r.tradeMaxProfit !== null) profitPrices.push(p.entry + r.tradeMaxProfit / qty);
     const lossAt = lossPrices.length ? Math.max(...lossPrices) : null;
     const profitAt = profitPrices.length ? Math.min(...profitPrices) : null;
 
@@ -301,6 +310,10 @@ class HourlyRangeDaySim {
         }
         if (r.dayMaxProfit !== null && dayRun >= r.dayMaxProfit - 1e-6) {
           this.exit(ltp, `Day P&L ${dayRun.toFixed(0)} hit day max profit ${r.dayMaxProfit}`, "DAY_TARGET");
+          return;
+        }
+        if (r.tradeMaxProfit !== null && move >= r.tradeMaxProfit - 1e-6) {
+          this.exit(ltp, `Trade P&L ${move.toFixed(0)} hit trade profit ${r.tradeMaxProfit}`, "TRADE_TARGET");
           return;
         }
       }
@@ -478,7 +491,7 @@ async function runHourlyRangeTouch(input, { strategy, rules }) {
         // a new ATM strike per trade, not strike changes -> no strikeChanges count
         firstPivots: null,
         trades: t.length,
-        targets: t.filter((x) => x.exitType === "CYCLE_TARGET" || x.exitType === "DAY_TARGET").length,
+        targets: t.filter((x) => ["CYCLE_TARGET", "DAY_TARGET", "TRADE_TARGET"].includes(x.exitType)).length,
         stopLosses: t.filter((x) => ["SL", "CYCLE_SL", "DAY_SL"].includes(x.exitType)).length,
       };
     };
@@ -575,12 +588,13 @@ async function runHourlyRangeTouch(input, { strategy, rules }) {
       cycles: CYCLE_DEFS.map((c) => ({ cycle: c.k, range: [c.rangeStart, c.readyAt], window: [c.readyAt, c.windowEnd] })),
       candleMinutes,
       confirmation: `avg = (O+H+L+C)/4 of the ${candleMinutes}-min NIFTY candle: CE line < avg < close, PE close < avg < line`,
-      strike: `ATM from the signal candle close (nearest ${STRIKE_STEP}), nearest weekly expiry`,
+      strike: `${strikeLabel(rules.strikeOffset)} from the signal candle close (ATM = nearest ${STRIKE_STEP}), nearest weekly expiry`,
       stopLoss: `${candleMinutes}-min NIFTY close back through the entry line`,
       cycleMaxLoss: rules.cycleMaxLoss,
       cycleMaxProfit: rules.cycleMaxProfit,
       dayMaxLoss: rules.dayMaxLoss,
       dayMaxProfit: rules.dayMaxProfit,
+      tradeMaxProfit: rules.tradeMaxProfit,
       maxEntriesPerCycle: Number.isFinite(rules.maxEntries) ? rules.maxEntries : "no limit",
       otherLineExit: rules.otherLineExit
         ? "a NIFTY tick touching the cycle's other line exits; that line stays armed in the same cycle"
@@ -613,14 +627,17 @@ export const runNiftyHourlyRangeTouch1mBacktest = (input) =>
 // =========================
 
 const TIMEFRAMES = [1, 3, 5];
+const STRIKES = { OTM2: -2, OTM1: -1, ATM: 0, ITM1: 1, ITM2: 2, ITM3: 3 };
 
 // request body "options" -> engine rules. Every limit: { enabled: boolean, value: rupees > 0 }
 export const CUSTOM_DEFAULTS = {
   timeframe: 3,
+  strike: "ITM2",
   daySl: { enabled: false, value: 7000 },
   cycleSl: { enabled: true, value: 3500 },
   dayProfit: { enabled: false, value: 10000 },
   cycleProfit: { enabled: true, value: 5000 },
+  tradeProfit: { enabled: false, value: 2000 },
 };
 
 function customRules(raw = {}) {
@@ -629,6 +646,8 @@ function customRules(raw = {}) {
 
   const timeframe = o.timeframe === undefined ? CUSTOM_DEFAULTS.timeframe : Number(o.timeframe);
   if (!TIMEFRAMES.includes(timeframe)) errors.push("options.timeframe must be 1, 3 or 5 (minutes)");
+  const strike = o.strike === undefined ? CUSTOM_DEFAULTS.strike : String(o.strike).toUpperCase();
+  if (!Object.hasOwn(STRIKES, strike)) errors.push(`options.strike must be one of ${Object.keys(STRIKES).join(", ")}`);
 
   const limit = (name) => {
     const v = o[name] === undefined ? CUSTOM_DEFAULTS[name] : o[name];
@@ -648,6 +667,7 @@ function customRules(raw = {}) {
   const cycleSl = limit("cycleSl");
   const dayProfit = limit("dayProfit");
   const cycleProfit = limit("cycleProfit");
+  const tradeProfit = limit("tradeProfit");
   if (errors.length) throw new BacktestError("Invalid options", 400, errors);
 
   return {
@@ -658,6 +678,8 @@ function customRules(raw = {}) {
     dayMaxProfit: dayProfit,
     maxEntries: Infinity,
     otherLineExit: true,
+    strikeOffset: STRIKES[strike],
+    tradeMaxProfit: tradeProfit,
   };
 }
 
