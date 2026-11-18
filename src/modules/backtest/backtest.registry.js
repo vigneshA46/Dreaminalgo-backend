@@ -8,7 +8,11 @@ import { runPivotOptionBuyingCumBacktest } from "./backtest.service.js";
 import { runNiftyOptionPivotBufferBacktest } from "./pivotBuffer.service.js";
 import { runNiftyOptionPivotFixedTargetBacktest } from "./pivotFixedTarget.service.js";
 import { runNiftyOptionLevelBreakoutBacktest } from "./levelBreakout.service.js";
-import { runNiftyHourlyRangeTouchBacktest, runNiftyHourlyRangeTouch1mBacktest } from "./hourlyRange.service.js";
+import {
+  runNiftyHourlyRangeTouchBacktest,
+  runNiftyHourlyRangeTouch1mBacktest,
+  runNiftyHourlyRangeTouchCustomBacktest,
+} from "./hourlyRange.service.js";
 
 export const BACKTEST_STRATEGIES = {
   pivot_option_buying_cum: {
@@ -52,5 +56,12 @@ export const BACKTEST_STRATEGIES = {
       "Same as nifty_hourly_range_touch with 1-min NIFTY candles: line touch + 1-min close beyond it with avg-price confirmation → " +
       "ATM CE / PE, 1 lot. SL 1-min close back through the line, cycle limits −₹3,500 / +₹5,000, max 2 entries per cycle.",
     run: runNiftyHourlyRangeTouch1mBacktest,
+  },
+  nifty_hourly_range_touch_custom: {
+    title: "nifty_hourly_range_touch_custom",
+    description:
+      "NIFTY hourly High / Low touch strategy with your settings: 1 / 3 / 5-min candles, day and cycle SL / profit on or off. " +
+      "Exits on a candle close back through the entry line or when NIFTY touches the cycle's other line, which stays armed for the next entry. No entry limit.",
+    run: runNiftyHourlyRangeTouchCustomBacktest,
   },
 };

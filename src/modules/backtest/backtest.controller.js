@@ -28,7 +28,10 @@ const runBacktest = (runner) => async (req, res) => {
     res.status(status).json({
       success: false,
       message: err.message,
-      errors: [{ stage: "run", message: err.message, details: err.details?.dhanError || null }],
+      // invalid strategy options come back as a list of messages
+      errors: status === 400 && Array.isArray(err.details)
+        ? err.details
+        : [{ stage: "run", message: err.message, details: err.details?.dhanError || null }],
       logs: err.details?.logs || [],
     });
   }
@@ -51,3 +54,6 @@ export const niftyHourlyRangeTouch = runBacktest(hourlyRangeService.runNiftyHour
 
 // POST /api/backtest/nifty_hourly_range_touch_1m
 export const niftyHourlyRangeTouch1m = runBacktest(hourlyRangeService.runNiftyHourlyRangeTouch1mBacktest);
+
+// POST /api/backtest/nifty_hourly_range_touch_custom   body adds: options { timeframe, daySl, cycleSl, dayProfit, cycleProfit }
+export const niftyHourlyRangeTouchCustom = runBacktest(hourlyRangeService.runNiftyHourlyRangeTouchCustomBacktest);

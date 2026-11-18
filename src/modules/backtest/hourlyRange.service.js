@@ -2,6 +2,9 @@
  * BACKTEST — NIFTY hourly high-low touch & confirmation
  *   nifty_hourly_range_touch     (version 1, 3-min entry candles)
  *   nifty_hourly_range_touch_1m  (version 2, 1-min entry candles) — same rules, candle size differs
+ *   nifty_hourly_range_touch_custom — user settings (1 / 3 / 5-min candles, day and cycle SL / profit
+ *     on or off with values), no entry limit, and an extra exit: a NIFTY tick touching the cycle's
+ *     OTHER line closes the trade and arms that line for the next entry (same cycle, no fresh touch)
  *
  * Levels and signals come from the NIFTY index chart, trades are NIFTY options.
  *   - 5 hourly ranges: 09:15-10:15, 10:15-11:15, 11:15-12:15, 12:15-13:15, 13:15-14:15.
@@ -42,10 +45,17 @@ import { summarize, inr } from "./backtestRunner.js";
 const CYCLES = 5;
 const DAY_START = "09:15";
 const DAY_CLOSE = "15:15";        // no entries from here, open trade squared off
-const CYCLE_MAX_LOSS = -3500;
-const CYCLE_MAX_PROFIT = 5000;
-const MAX_ENTRIES = 2;
 const LOTS = 1;
+
+// versions 1 and 2: fixed rules
+const FIXED_RULES = {
+  cycleMaxLoss: -3500,
+  cycleMaxProfit: 5000,
+  dayMaxLoss: null,
+  dayMaxProfit: null,
+  maxEntries: 2,
+  otherLineExit: false,
+};
 const STRIKE_STEP = 50;
 
 const toMin = (hhmm) => {
@@ -70,9 +80,11 @@ const CYCLE_DEFS = Array.from({ length: CYCLES }, (_, i) => {
 // =========================
 
 class HourlyRangeDaySim {
-  constructor(day, options, index, candleMinutes) {
+  constructor(day, options, index, rules) {
     this.day = day;
-    this.candleMinutes = candleMinutes;
+    this.rules = rules;       // { candleMinutes, cycleMaxLoss, cycleMaxProfit, dayMaxLoss, dayMaxProfit, maxEntries, otherLineExit }
+    this.candleMinutes = rules.candleMinutes;
+    this.dayStoppedBy = null;
     this.options = options;   // nearest expiry 1-min option bars, today
     this.index = index;       // NIFTY 1-min bars { hhmm: [o, h, l, c] }
     this.cycles = CYCLE_DEFS.map((d) => ({ ...d, high: null, low: null, ready: false, pnl: 0, entries: 0, stoppedBy: null }));
@@ -89,6 +101,10 @@ class HourlyRangeDaySim {
 
   log(type, msg, extra = {}) {
     this.events.push({ time: this.now, type, message: msg, ...extra });
+  }
+
+  realizedDay() {
+    return this.legs.CE.pnl + this.legs.PE.pnl;
   }
 
   optionBar(side, strike, hhmm) {
@@ -127,7 +143,8 @@ class HourlyRangeDaySim {
 
   canEnter() {
     const c = this.active;
-    return c && !this.pos && !c.stoppedBy && c.entries < MAX_ENTRIES && this.now < c.windowEnd && this.now < DAY_CLOSE;
+    return c && !this.pos && !this.dayStoppedBy && !c.stoppedBy && c.entries < this.rules.maxEntries &&
+      this.now < c.windowEnd && this.now < DAY_CLOSE;
   }
 
   // ---------- orders ----------
@@ -142,7 +159,8 @@ class HourlyRangeDaySim {
     if (!this.legs[side].strikes.includes(strike)) this.legs[side].strikes.push(strike);
     const reason = `NIFTY ${this.candleMinutes}-min close ${candle.close} ${side === "CE" ? ">" : "<"} ${this.touch.line} ${this.touch.value}, avg ${round(avg)}`;
     this.pos.reason = reason;
-    this.log("ENTRY", `C${c.k} BUY ${side} ${strike} @ ${price.toFixed(2)} (entry ${c.entries}/${MAX_ENTRIES}) | ${reason}`, {
+    const max = Number.isFinite(this.rules.maxEntries) ? `/${this.rules.maxEntries}` : "";
+    this.log("ENTRY", `C${c.k} BUY ${side} ${strike} @ ${price.toFixed(2)} (entry ${c.entries}${max}) | ${reason}`, {
       cycle: c.k, side, strike, price: round(price),
     });
     this.touch = null; // used: the next entry needs a fresh touch
@@ -183,11 +201,22 @@ class HourlyRangeDaySim {
     });
     this.pos = null;
 
+    const r = this.rules;
     if (!c.stoppedBy) {
-      if (c.pnl <= CYCLE_MAX_LOSS + 1e-6) c.stoppedBy = "MAX LOSS";
-      else if (c.pnl >= CYCLE_MAX_PROFIT - 1e-6) c.stoppedBy = "MAX PROFIT";
-      else if (c.entries >= MAX_ENTRIES) c.stoppedBy = "2 ENTRIES USED";
+      // 1 paisa tolerance: a limit exit lands on the limit, float noise must not leave it "just short"
+      if (r.cycleMaxLoss !== null && c.pnl <= r.cycleMaxLoss + 0.01) c.stoppedBy = "MAX LOSS";
+      else if (r.cycleMaxProfit !== null && c.pnl >= r.cycleMaxProfit - 0.01) c.stoppedBy = "MAX PROFIT";
+      else if (c.entries >= r.maxEntries) c.stoppedBy = `${r.maxEntries} ENTRIES USED`;
       if (c.stoppedBy) this.log("CYCLE", `C${c.k} stopped: ${c.stoppedBy} (cycle P&L ${c.pnl.toFixed(0)})`, { cycle: c.k });
+    }
+    if (!this.dayStoppedBy) {
+      const day = this.realizedDay();
+      if (r.dayMaxLoss !== null && day <= r.dayMaxLoss + 0.01) this.dayStoppedBy = "DAY MAX LOSS";
+      else if (r.dayMaxProfit !== null && day >= r.dayMaxProfit - 0.01) this.dayStoppedBy = "DAY MAX PROFIT";
+      if (this.dayStoppedBy) {
+        this.closeReason = `${this.dayStoppedBy} (${day.toFixed(0)})`;
+        this.log("DAY", `Trading stopped for the day: ${this.dayStoppedBy} (day P&L ${day.toFixed(0)})`);
+      }
     }
     if (kind !== "FORCE") this.activateLatest();
   }
@@ -227,32 +256,51 @@ class HourlyRangeDaySim {
     this.enter(side, strike, bar[0], candle, avg);
   }
 
-  // ---------- option ticks: live cycle limits ----------
+  // ---------- option ticks: live money limits (cycle and day) ----------
 
   walkOption(bar) {
     const p = this.pos;
+    const r = this.rules;
     const [o, h, l, c] = bar;
     const path = c >= o ? [o, l, h, c] : [o, h, l, c];
     const qty = LOTSIZE * p.lots;
+    // option prices where a limit would be hit (fixed for the whole trade)
+    const dayRealized = this.realizedDay();
+    const lossPrices = [];
+    const profitPrices = [];
+    if (r.cycleMaxLoss !== null) lossPrices.push(p.entry + (r.cycleMaxLoss - p.cycle.pnl) / qty);
+    if (r.dayMaxLoss !== null) lossPrices.push(p.entry + (r.dayMaxLoss - dayRealized) / qty);
+    if (r.cycleMaxProfit !== null) profitPrices.push(p.entry + (r.cycleMaxProfit - p.cycle.pnl) / qty);
+    if (r.dayMaxProfit !== null) profitPrices.push(p.entry + (r.dayMaxProfit - dayRealized) / qty);
+    const lossAt = lossPrices.length ? Math.max(...lossPrices) : null;
+    const profitAt = profitPrices.length ? Math.min(...profitPrices) : null;
+
     let cur = o;
     for (let i = 0; i < path.length && this.pos; i++) {
       const b = path[i];
-      // prices where cycle P&L would hit a limit
-      const lossAt = p.entry + (CYCLE_MAX_LOSS - p.cycle.pnl) / qty;
-      const profitAt = p.entry + (CYCLE_MAX_PROFIT - p.cycle.pnl) / qty;
       const pts = [];
       if (i === 0) pts.push(o);
-      else if (b < cur) pts.push(...(lossAt < cur && lossAt > b ? [lossAt] : []), b);
-      else pts.push(...(profitAt > cur && profitAt < b ? [profitAt] : []), b);
+      else if (b < cur) pts.push(...(lossAt !== null && lossAt < cur && lossAt > b ? [lossAt] : []), b);
+      else pts.push(...(profitAt !== null && profitAt > cur && profitAt < b ? [profitAt] : []), b);
       for (const ltp of pts) {
         p.ltp = ltp;
-        const running = p.cycle.pnl + (ltp - p.entry) * qty;
-        if (running <= CYCLE_MAX_LOSS + 1e-6) {
-          this.exit(round(ltp, 4), `C${p.cycle.k} P&L ${running.toFixed(0)} hit max loss ${CYCLE_MAX_LOSS}`, "CYCLE_SL");
+        const move = (ltp - p.entry) * qty;
+        const cycleRun = p.cycle.pnl + move;
+        const dayRun = dayRealized + move;
+        if (r.cycleMaxLoss !== null && cycleRun <= r.cycleMaxLoss + 1e-6) {
+          this.exit(ltp, `C${p.cycle.k} P&L ${cycleRun.toFixed(0)} hit max loss ${r.cycleMaxLoss}`, "CYCLE_SL");
           return;
         }
-        if (running >= CYCLE_MAX_PROFIT - 1e-6) {
-          this.exit(round(ltp, 4), `C${p.cycle.k} P&L ${running.toFixed(0)} hit max profit ${CYCLE_MAX_PROFIT}`, "CYCLE_TARGET");
+        if (r.dayMaxLoss !== null && dayRun <= r.dayMaxLoss + 1e-6) {
+          this.exit(ltp, `Day P&L ${dayRun.toFixed(0)} hit day max loss ${r.dayMaxLoss}`, "DAY_SL");
+          return;
+        }
+        if (r.cycleMaxProfit !== null && cycleRun >= r.cycleMaxProfit - 1e-6) {
+          this.exit(ltp, `C${p.cycle.k} P&L ${cycleRun.toFixed(0)} hit max profit ${r.cycleMaxProfit}`, "CYCLE_TARGET");
+          return;
+        }
+        if (r.dayMaxProfit !== null && dayRun >= r.dayMaxProfit - 1e-6) {
+          this.exit(ltp, `Day P&L ${dayRun.toFixed(0)} hit day max profit ${r.dayMaxProfit}`, "DAY_TARGET");
           return;
         }
       }
@@ -260,10 +308,26 @@ class HourlyRangeDaySim {
     }
   }
 
+  // custom version: a NIFTY tick touching the trade cycle's OTHER line exits, and that line
+  // stays armed for the next entry while the same cycle is still active
+  checkOtherLineExit(bar, prevClose, optionBar) {
+    const p = this.pos;
+    const [line, value] = p.line === "HIGH" ? ["LOW", p.cycle.low] : ["HIGH", p.cycle.high];
+    const lo = Math.min(bar[2], prevClose ?? bar[2]);
+    const hi = Math.max(bar[1], prevClose ?? bar[1]);
+    if (!(lo <= value && value <= hi)) return;
+    const cycle = p.cycle;
+    this.exit(optionBar ? optionBar[3] : p.ltp, `NIFTY touched C${cycle.k} ${line} ${value} (other line)`, "LINE_TOUCH");
+    if (this.active === cycle && !cycle.stoppedBy && !this.dayStoppedBy) {
+      this.touch = { line, value, time: this.now };
+      this.log("TOUCH", `C${cycle.k} ${line} ${value} armed by the exit touch (no fresh touch needed)`, { cycle: cycle.k, line, value });
+    }
+  }
+
   // ---------- index ticks: line touches ----------
 
   updateTouch(bar, prevClose) {
-    if (!this.active || this.pos || this.active.stoppedBy) return;
+    if (!this.active || this.pos || this.active.stoppedBy || this.dayStoppedBy) return;
     const lo = Math.min(bar[2], prevClose ?? bar[2]);
     const hi = Math.max(bar[1], prevClose ?? bar[1]);
     const hits = [["HIGH", this.active.high], ["LOW", this.active.low]].filter(([, v]) => lo <= v && v <= hi);
@@ -305,10 +369,11 @@ class HourlyRangeDaySim {
         if (!this.pos) this.activateLatest();
       }
 
-      // open trade: option ticks for this minute (live cycle limits)
+      // open trade: option ticks for this minute (live money limits), then the other-line touch
       if (this.pos) {
         const ob = this.optionBar(this.pos.side, this.pos.strike, m);
         if (ob) this.walkOption(ob);
+        if (this.pos && this.rules.otherLineExit && ib) this.checkOtherLineExit(ib, prevClose, ob);
       }
 
       // NIFTY ticks: candle + line touches
@@ -345,7 +410,8 @@ class HourlyRangeDaySim {
 // RUNNER
 // =========================
 
-async function runHourlyRangeTouch(input, { strategy, candleMinutes }) {
+async function runHourlyRangeTouch(input, { strategy, rules }) {
+  const { candleMinutes } = rules;
   const started = Date.now();
   const log = new RunLog();
   const dh = new DhanData({ clientId: input.clientId, accessToken: input.accessToken, log });
@@ -390,7 +456,7 @@ async function runHourlyRangeTouch(input, { strategy, candleMinutes }) {
 
     let sim;
     try {
-      sim = new HourlyRangeDaySim(day, options, index, candleMinutes);
+      sim = new HourlyRangeDaySim(day, options, index, rules);
       const err = sim.run();
       if (err) {
         days.push({ ...rec, status: "skipped", message: err });
@@ -412,8 +478,8 @@ async function runHourlyRangeTouch(input, { strategy, candleMinutes }) {
         // a new ATM strike per trade, not strike changes -> no strikeChanges count
         firstPivots: null,
         trades: t.length,
-        targets: t.filter((x) => x.exitType === "CYCLE_TARGET").length,
-        stopLosses: t.filter((x) => x.exitType === "SL" || x.exitType === "CYCLE_SL").length,
+        targets: t.filter((x) => x.exitType === "CYCLE_TARGET" || x.exitType === "DAY_TARGET").length,
+        stopLosses: t.filter((x) => ["SL", "CYCLE_SL", "DAY_SL"].includes(x.exitType)).length,
       };
     };
     const ce = leg("CE");
@@ -433,6 +499,8 @@ async function runHourlyRangeTouch(input, { strategy, candleMinutes }) {
       targets: ce.targets + pe.targets,
       stopLosses: ce.stopLosses + pe.stopLosses,
       closeReason: sim.closeReason,
+      ...(rules.otherLineExit ? { lineTouchExits: sim.trades.filter((x) => x.exitType === "LINE_TOUCH").length } : {}),
+      dayStoppedBy: sim.dayStoppedBy,
       cycles: sim.cycleReport(),
       trades: sim.trades,
     };
@@ -461,7 +529,11 @@ async function runHourlyRangeTouch(input, { strategy, candleMinutes }) {
     summary.cycleStops = {
       maxLoss: allCycles.filter((c) => c.stoppedBy === "MAX LOSS").length,
       maxProfit: allCycles.filter((c) => c.stoppedBy === "MAX PROFIT").length,
-      twoEntriesUsed: allCycles.filter((c) => c.stoppedBy === "2 ENTRIES USED").length,
+      ...(rules.maxEntries === 2 ? { twoEntriesUsed: allCycles.filter((c) => c.stoppedBy === "2 ENTRIES USED").length } : {}),
+    };
+    summary.dayStops = {
+      maxLoss: okDays.filter((d) => d.dayStoppedBy === "DAY MAX LOSS").length,
+      maxProfit: okDays.filter((d) => d.dayStoppedBy === "DAY MAX PROFIT").length,
     };
 
     analysis = [...head];
@@ -470,8 +542,18 @@ async function runHourlyRangeTouch(input, { strategy, candleMinutes }) {
       analysis.push(`${trades.length} trades (${ce} CE / ${trades.length - ce} PE). Exits: ` +
         Object.entries(summary.exits).map(([k, v]) => `${k} ${v}`).join(", ") +
         `. Avg win ${inr(summary.avgWin)} vs avg loss ${inr(summary.avgLoss)}.`);
-      analysis.push(`Cycles stopped by the ₹3,500 loss limit: ${summary.cycleStops.maxLoss}, by the ₹5,000 profit limit: ` +
-        `${summary.cycleStops.maxProfit}, after 2 entries: ${summary.cycleStops.twoEntriesUsed}.`);
+      const stops = [];
+      if (rules.cycleMaxLoss !== null) stops.push(`by the ${inr(-rules.cycleMaxLoss)} cycle loss limit: ${summary.cycleStops.maxLoss}`);
+      if (rules.cycleMaxProfit !== null) stops.push(`by the ${inr(rules.cycleMaxProfit)} cycle profit limit: ${summary.cycleStops.maxProfit}`);
+      if (rules.maxEntries === 2) stops.push(`after 2 entries: ${summary.cycleStops.twoEntriesUsed}`);
+      if (stops.length) analysis.push(`Cycles stopped ${stops.join(", ")}.`);
+      if (rules.dayMaxLoss !== null || rules.dayMaxProfit !== null) {
+        analysis.push(`Days stopped early: ${summary.dayStops.maxLoss} by the day loss limit, ${summary.dayStops.maxProfit} by the day profit limit.`);
+      }
+      if (rules.otherLineExit) {
+        const lt = trades.filter((t) => t.exitType === "LINE_TOUCH");
+        analysis.push(`${lt.length} trades exited on the other-line touch, net ${inr(lt.reduce((a, t) => a + t.pnl, 0))}.`);
+      }
       const cyc = Object.entries(byCycle).sort((a, b) => b[1].pnl - a[1].pnl);
       if (cyc.length > 1) {
         analysis.push(`Best cycle: ${cyc[0][0]} (${cyc[0][1].trades} trades, ${inr(cyc[0][1].pnl)}); ` +
@@ -495,9 +577,14 @@ async function runHourlyRangeTouch(input, { strategy, candleMinutes }) {
       confirmation: `avg = (O+H+L+C)/4 of the ${candleMinutes}-min NIFTY candle: CE line < avg < close, PE close < avg < line`,
       strike: `ATM from the signal candle close (nearest ${STRIKE_STEP}), nearest weekly expiry`,
       stopLoss: `${candleMinutes}-min NIFTY close back through the entry line`,
-      cycleMaxLoss: CYCLE_MAX_LOSS,
-      cycleMaxProfit: CYCLE_MAX_PROFIT,
-      maxEntriesPerCycle: MAX_ENTRIES,
+      cycleMaxLoss: rules.cycleMaxLoss,
+      cycleMaxProfit: rules.cycleMaxProfit,
+      dayMaxLoss: rules.dayMaxLoss,
+      dayMaxProfit: rules.dayMaxProfit,
+      maxEntriesPerCycle: Number.isFinite(rules.maxEntries) ? rules.maxEntries : "no limit",
+      otherLineExit: rules.otherLineExit
+        ? "a NIFTY tick touching the cycle's other line exits; that line stays armed in the same cycle"
+        : false,
       dayClose: DAY_CLOSE,
     },
     summary,
@@ -515,8 +602,65 @@ async function runHourlyRangeTouch(input, { strategy, candleMinutes }) {
 
 // version 1: 3-min entry candles
 export const runNiftyHourlyRangeTouchBacktest = (input) =>
-  runHourlyRangeTouch(input, { strategy: "nifty_hourly_range_touch", candleMinutes: 3 });
+  runHourlyRangeTouch(input, { strategy: "nifty_hourly_range_touch", rules: { ...FIXED_RULES, candleMinutes: 3 } });
 
 // version 2: 1-min entry candles
 export const runNiftyHourlyRangeTouch1mBacktest = (input) =>
-  runHourlyRangeTouch(input, { strategy: "nifty_hourly_range_touch_1m", candleMinutes: 1 });
+  runHourlyRangeTouch(input, { strategy: "nifty_hourly_range_touch_1m", rules: { ...FIXED_RULES, candleMinutes: 1 } });
+
+// =========================
+// CUSTOM VERSION (user settings)
+// =========================
+
+const TIMEFRAMES = [1, 3, 5];
+
+// request body "options" -> engine rules. Every limit: { enabled: boolean, value: rupees > 0 }
+export const CUSTOM_DEFAULTS = {
+  timeframe: 3,
+  daySl: { enabled: false, value: 7000 },
+  cycleSl: { enabled: true, value: 3500 },
+  dayProfit: { enabled: false, value: 10000 },
+  cycleProfit: { enabled: true, value: 5000 },
+};
+
+function customRules(raw = {}) {
+  const o = raw && typeof raw === "object" ? raw : {};
+  const errors = [];
+
+  const timeframe = o.timeframe === undefined ? CUSTOM_DEFAULTS.timeframe : Number(o.timeframe);
+  if (!TIMEFRAMES.includes(timeframe)) errors.push("options.timeframe must be 1, 3 or 5 (minutes)");
+
+  const limit = (name) => {
+    const v = o[name] === undefined ? CUSTOM_DEFAULTS[name] : o[name];
+    if (!v || typeof v !== "object" || typeof v.enabled !== "boolean") {
+      errors.push(`options.${name} must be { enabled: true | false, value: amount }`);
+      return null;
+    }
+    if (!v.enabled) return null;
+    const value = Number(v.value);
+    if (!Number.isFinite(value) || value <= 0) {
+      errors.push(`options.${name}.value must be an amount above 0 when enabled`);
+      return null;
+    }
+    return value;
+  };
+  const daySl = limit("daySl");
+  const cycleSl = limit("cycleSl");
+  const dayProfit = limit("dayProfit");
+  const cycleProfit = limit("cycleProfit");
+  if (errors.length) throw new BacktestError("Invalid options", 400, errors);
+
+  return {
+    candleMinutes: timeframe,
+    cycleMaxLoss: cycleSl === null ? null : -cycleSl,
+    cycleMaxProfit: cycleProfit,
+    dayMaxLoss: daySl === null ? null : -daySl,
+    dayMaxProfit: dayProfit,
+    maxEntries: Infinity,
+    otherLineExit: true,
+  };
+}
+
+// custom: 1 / 3 / 5-min candles, optional day / cycle SL and profit, no entry limit, other-line exit
+export const runNiftyHourlyRangeTouchCustomBacktest = (input) =>
+  runHourlyRangeTouch(input, { strategy: "nifty_hourly_range_touch_custom", rules: customRules(input.options) });

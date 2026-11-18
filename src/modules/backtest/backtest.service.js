@@ -914,6 +914,8 @@ export function validateBacktestInput(body) {
     fromDate,
     toDate,
     includeEvents: body.includeEvents === true,
+    // strategy settings (only strategies that take settings read it, and validate it themselves)
+    options: body.options,
   };
 }
 

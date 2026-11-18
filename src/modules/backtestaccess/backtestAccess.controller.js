@@ -82,7 +82,7 @@ export const myStrategies = async (req, res) => {
 // one run per user at a time (each run is ~42-126 Dhan calls)
 const running = new Set();
 
-// POST /api/backtest-access/my/run/:key   body: { date: "YYYY-MM-DD" }
+// POST /api/backtest-access/my/run/:key   body: { date: "YYYY-MM-DD", options? (strategies with settings) }
 export const runMyBacktest = async (req, res) => {
   const { key } = req.params;
   const userId = req.user.id;
@@ -106,7 +106,7 @@ export const runMyBacktest = async (req, res) => {
 
     const creds = await service.getPlatformDhanCredentials();
     // users run one day at a time; same date checks as the admin API
-    const input = validateBacktestInput({ ...creds, fromDate: date, toDate: date, includeEvents: true });
+    const input = validateBacktestInput({ ...creds, fromDate: date, toDate: date, includeEvents: true, options: req.body?.options });
     const result = await strategy.run(input);
 
     await service.logRunService({
