@@ -61,7 +61,7 @@ export const BACKTEST_STRATEGIES = {
     title: "nifty_hourly_range_touch_custom",
     description:
       "NIFTY hourly High / Low touch strategy with your settings: 1 / 3 / 5-min candles, strike (default ITM2), day / cycle SL and profit, per-trade profit. " +
-      "Exits on a candle close back through the entry line or when NIFTY touches the cycle's other line, which stays armed for the next entry. No entry limit.",
+      "Exits on a candle close back through the entry line or when NIFTY touches the cycle's other line. A touched line stays valid for a few candles, also during a trade, until an entry uses it. No entry limit.",
     run: runNiftyHourlyRangeTouchCustomBacktest,
   },
 };

@@ -208,7 +208,11 @@ class DhanData {
     throw new BacktestError(`Dhan ${api}: too many retries (rate limit / network)`, 503);
   }
 
-  /** NIFTY index 1-min OHLC for one day: { hhmm: [o, h, l, c] } (Dhan has no 09:15 bar for the index). */
+  /**
+   * NIFTY index 1-min OHLC for one day: { hhmm: [o, h, l, c] }, 09:15 ... 15:29.
+   * Asked from 09:00: when the request starts exactly at 09:15 Dhan leaves the 09:15 candle out,
+   * which made the first hourly High / Low wrong on most days.
+   */
   async indexDay(day) {
     const key = `${day}_index`;
     if (this.mem.has(key)) return this.mem.get(key);
@@ -218,7 +222,7 @@ class DhanData {
         exchangeSegment: "IDX_I",
         instrument: "INDEX",
         interval: "1",
-        fromDate: `${day} 09:15:00`,
+        fromDate: `${day} 09:00:00`,
         toDate: `${day} 15:30:00`,
       },
       INTRADAY_URL
@@ -226,7 +230,10 @@ class DhanData {
     const out = {};
     (r.timestamp || []).forEach((ts, i) => {
       const t = istParts(ts);
-      if (t.date === day) out[t.hhmm] = [Number(r.open[i]), Number(r.high[i]), Number(r.low[i]), Number(r.close[i])];
+      // market hours only (09:00 start can bring pre-open prints)
+      if (t.date === day && t.hhmm >= "09:15" && t.hhmm <= "15:29") {
+        out[t.hhmm] = [Number(r.open[i]), Number(r.high[i]), Number(r.low[i]), Number(r.close[i])];
+      }
     });
     this.mem.set(key, out);
     return out;
