@@ -3,7 +3,8 @@
  *   nifty_hourly_range_touch     (version 1, 3-min entry candles)
  *   nifty_hourly_range_touch_1m  (version 2, 1-min entry candles) — same rules, candle size differs
  *   nifty_hourly_range_touch_custom — user settings (1 / 3 / 5-min candles, strike ATM / ITM / OTM,
- *     day and cycle SL / profit and per-trade profit on or off with values), no entry limit, and an extra exit: a NIFTY tick touching the cycle's
+ *     day and cycle SL / profit and per-trade profit on or off with values, touch buffer: NIFTY within N points
+ *     of a line counts as a touch), no entry limit, and an extra exit: a NIFTY tick touching the cycle's
  *     OTHER line closes the trade and arms that line for the next entry (same cycle, no fresh touch)
  *
  * Levels and signals come from the NIFTY index chart, trades are NIFTY options.
@@ -57,6 +58,8 @@ const FIXED_RULES = {
   otherLineExit: false,
   strikeOffset: 0,        // strikes in-the-money from ATM (negative = out-of-the-money)
   tradeMaxProfit: null,   // per-trade profit exit (rupees)
+  touchBuffer: 0,         // NIFTY within this many points of a line counts as touching it
+  includeCandles: false,  // return the day's NIFTY candles of the entry timeframe
 };
 const STRIKE_STEP = 50;
 
@@ -328,7 +331,8 @@ class HourlyRangeDaySim {
     const [line, value] = p.line === "HIGH" ? ["LOW", p.cycle.low] : ["HIGH", p.cycle.high];
     const lo = Math.min(bar[2], prevClose ?? bar[2]);
     const hi = Math.max(bar[1], prevClose ?? bar[1]);
-    if (!(lo <= value && value <= hi)) return;
+    const b = this.rules.touchBuffer;
+    if (!(lo <= value + b && hi >= value - b)) return;
     const cycle = p.cycle;
     this.exit(optionBar ? optionBar[3] : p.ltp, `NIFTY touched C${cycle.k} ${line} ${value} (other line)`, "LINE_TOUCH");
     if (this.active === cycle && !cycle.stoppedBy && !this.dayStoppedBy) {
@@ -343,7 +347,8 @@ class HourlyRangeDaySim {
     if (!this.active || this.pos || this.active.stoppedBy || this.dayStoppedBy) return;
     const lo = Math.min(bar[2], prevClose ?? bar[2]);
     const hi = Math.max(bar[1], prevClose ?? bar[1]);
-    const hits = [["HIGH", this.active.high], ["LOW", this.active.low]].filter(([, v]) => lo <= v && v <= hi);
+    const b = this.rules.touchBuffer;
+    const hits = [["HIGH", this.active.high], ["LOW", this.active.low]].filter(([, v]) => lo <= v + b && hi >= v - b);
     if (!hits.length) return;
     const [line, value] = hits.reduce((a, b) => (Math.abs(b[1] - bar[3]) < Math.abs(a[1] - bar[3]) ? b : a));
     if (!this.touch || this.touch.line !== line) {
@@ -403,6 +408,26 @@ class HourlyRangeDaySim {
     }
     if (!this.closeReason) this.closeReason = `TIME EXIT ${DAY_CLOSE}`;
     return null;
+  }
+
+  // the whole day's NIFTY candles of the entry timeframe (09:15 ... 15:29), as traded on
+  indexCandles() {
+    const out = [];
+    let cur = null;
+    for (const m of minutesBetween(DAY_START, "15:29")) {
+      const b = this.index[m];
+      if (!b) continue;
+      const start = toHHMM(toMin(DAY_START) + Math.floor((toMin(m) - toMin(DAY_START)) / this.candleMinutes) * this.candleMinutes);
+      if (!cur || cur.time !== start) {
+        cur = { time: start, end: toHHMM(toMin(start) + this.candleMinutes), open: b[0], high: b[1], low: b[2], close: b[3] };
+        out.push(cur);
+      } else {
+        cur.high = Math.max(cur.high, b[1]);
+        cur.low = Math.min(cur.low, b[2]);
+        cur.close = b[3];
+      }
+    }
+    return out.map((c) => ({ ...c, avg: round((c.open + c.high + c.low + c.close) / 4) }));
   }
 
   cycleReport() {
@@ -515,6 +540,7 @@ async function runHourlyRangeTouch(input, { strategy, rules }) {
       ...(rules.otherLineExit ? { lineTouchExits: sim.trades.filter((x) => x.exitType === "LINE_TOUCH").length } : {}),
       dayStoppedBy: sim.dayStoppedBy,
       cycles: sim.cycleReport(),
+      ...(rules.includeCandles ? { indexCandles: sim.indexCandles() } : {}),
       trades: sim.trades,
     };
     if (input.includeEvents) out.events = sim.events;
@@ -595,6 +621,7 @@ async function runHourlyRangeTouch(input, { strategy, rules }) {
       dayMaxLoss: rules.dayMaxLoss,
       dayMaxProfit: rules.dayMaxProfit,
       tradeMaxProfit: rules.tradeMaxProfit,
+      touchBufferPoints: rules.touchBuffer,
       maxEntriesPerCycle: Number.isFinite(rules.maxEntries) ? rules.maxEntries : "no limit",
       otherLineExit: rules.otherLineExit
         ? "a NIFTY tick touching the cycle's other line exits; that line stays armed in the same cycle"
@@ -633,6 +660,7 @@ const STRIKES = { OTM2: -2, OTM1: -1, ATM: 0, ITM1: 1, ITM2: 2, ITM3: 3 };
 export const CUSTOM_DEFAULTS = {
   timeframe: 3,
   strike: "ITM2",
+  touchBuffer: 3,
   daySl: { enabled: false, value: 7000 },
   cycleSl: { enabled: true, value: 3500 },
   dayProfit: { enabled: false, value: 10000 },
@@ -668,6 +696,10 @@ function customRules(raw = {}) {
   const dayProfit = limit("dayProfit");
   const cycleProfit = limit("cycleProfit");
   const tradeProfit = limit("tradeProfit");
+  const touchBuffer = o.touchBuffer === undefined ? CUSTOM_DEFAULTS.touchBuffer : Number(o.touchBuffer);
+  if (!Number.isFinite(touchBuffer) || touchBuffer < 0 || touchBuffer > 100) {
+    errors.push("options.touchBuffer must be between 0 and 100 (NIFTY points)");
+  }
   if (errors.length) throw new BacktestError("Invalid options", 400, errors);
 
   return {
@@ -680,6 +712,8 @@ function customRules(raw = {}) {
     otherLineExit: true,
     strikeOffset: STRIKES[strike],
     tradeMaxProfit: tradeProfit,
+    touchBuffer,
+    includeCandles: true,
   };
 }
 
