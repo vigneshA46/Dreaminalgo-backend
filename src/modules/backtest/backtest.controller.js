@@ -3,6 +3,7 @@ import * as pivotBufferService from "./pivotBuffer.service.js";
 import * as pivotFixedTargetService from "./pivotFixedTarget.service.js";
 import * as levelBreakoutService from "./levelBreakout.service.js";
 import * as hourlyRangeService from "./hourlyRange.service.js";
+import * as bearishBreakoutService from "./bearishBreakout.service.js";
 import { startJob, getJob, cancelJob } from "./backtestJobs.js";
 
 // same input checks, status codes and error shape for every backtest endpoint
@@ -58,6 +59,9 @@ export const niftyHourlyRangeTouch1m = runBacktest(hourlyRangeService.runNiftyHo
 
 // POST /api/backtest/nifty_hourly_range_touch_custom   body adds: options { timeframe, daySl, cycleSl, dayProfit, cycleProfit }
 export const niftyHourlyRangeTouchCustom = runBacktest(hourlyRangeService.runNiftyHourlyRangeTouchCustomBacktest);
+
+// POST /api/backtest/nifty_bearish_breakout_option_buying
+export const niftyBearishBreakoutOptionBuying = runBacktest(bearishBreakoutService.runNiftyBearishBreakoutOptionBuyingBacktest);
 
 // ---------- background date-range runs (custom hourly strategy) ----------
 

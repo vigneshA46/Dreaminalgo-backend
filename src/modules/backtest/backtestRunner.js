@@ -57,15 +57,18 @@ export async function runDays(input, SimClass, label) {
         log.info("holiday / no data", day);
         continue;
       }
-      const pday = await prevTradingDay(dh, day);
-      if (!pday) {
-        days.push({ ...rec, status: "skipped", message: "no previous trading day found" });
-        log.warn("no previous trading day found", day);
-        continue;
+      // strategies that only use today's bars (needsPrev = false) skip the previous day's download
+      if (SimClass.needsPrev !== false) {
+        const pday = await prevTradingDay(dh, day);
+        if (!pday) {
+          days.push({ ...rec, status: "skipped", message: "no previous trading day found" });
+          log.warn("no previous trading day found", day);
+          continue;
+        }
+        // today's nearest contract on the previous day: code 1, or code 2 if that day was an expiry
+        const prevCode = isExpiryDay(await dh.day(pday, 1)) ? 2 : 1;
+        prev = await dh.day(pday, prevCode);
       }
-      // today's nearest contract on the previous day: code 1, or code 2 if that day was an expiry
-      const prevCode = isExpiryDay(await dh.day(pday, 1)) ? 2 : 1;
-      prev = await dh.day(pday, prevCode);
       if (SimClass.needsIndex) index = await dh.indexDay(day);
       if (dh.calls > calls0) log.info(`data ready (${dh.calls - calls0} API calls)`, day);
     } catch (e) {

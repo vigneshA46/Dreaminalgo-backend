@@ -8,6 +8,7 @@ import { runPivotOptionBuyingCumBacktest } from "./backtest.service.js";
 import { runNiftyOptionPivotBufferBacktest } from "./pivotBuffer.service.js";
 import { runNiftyOptionPivotFixedTargetBacktest } from "./pivotFixedTarget.service.js";
 import { runNiftyOptionLevelBreakoutBacktest } from "./levelBreakout.service.js";
+import { runNiftyBearishBreakoutOptionBuyingBacktest } from "./bearishBreakout.service.js";
 import {
   runNiftyHourlyRangeTouchBacktest,
   runNiftyHourlyRangeTouch1mBacktest,
@@ -61,7 +62,14 @@ export const BACKTEST_STRATEGIES = {
     title: "nifty_hourly_range_touch_custom",
     description:
       "NIFTY hourly High / Low touch strategy with your settings: 1 / 3 / 5-min candles, strike (default ITM2), day / cycle SL and profit, per-trade profit. " +
-      "Exits on a candle close back through the entry line or when NIFTY touches the cycle's other line. A touched line stays valid for a few candles, also during a trade, until an entry uses it. No entry limit.",
+      "Exits on a candle close back through the entry line or when NIFTY touches the cycle's other line. A touch stays valid until an entry uses it; after a stop loss the same line stays armed, after a target a fresh touch is needed. No entry limit.",
     run: runNiftyHourlyRangeTouchCustomBacktest,
+  },
+  nifty_bearish_breakout_option_buying: {
+    title: "nifty_bearish_breakout_option_buying",
+    description:
+      "NIFTY CE + PE, each side one strike priced at or just above 200 at 09:30. Latest bearish 15-min candle marks its high; a tick above high + 4 buys 1 lot, " +
+      "SL = low of that 15-min candle, then trail on the low of each completed 5-min Heikin Ashi candle. A fresh bearish candle is needed after every exit. Square off 15:14.",
+    run: runNiftyBearishBreakoutOptionBuyingBacktest,
   },
 };
