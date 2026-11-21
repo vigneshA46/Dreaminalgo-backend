@@ -256,7 +256,8 @@ class HourlyRangeDaySim {
         this.exit(bar ? bar[0] : p.ltp,
           `NIFTY ${this.candleMinutes}-min close ${candle.close} ${p.side === "CE" ? "<" : ">"} ${p.line} ${p.lineValue}`, "SL");
       }
-      return;
+      // an SL on this candle may be followed by an entry on the very same candle (e.g. CE stopped, PE condition true)
+      if (this.pos) return;
     }
 
     if (!this.canEnter()) return;
