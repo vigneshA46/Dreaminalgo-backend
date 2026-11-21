@@ -6,9 +6,10 @@
  *     day and cycle SL / profit and per-trade profit on or off with values, touch buffer: NIFTY within N points
  *     of a line counts as a touch), no entry limit, and an extra exit: a NIFTY tick touching the cycle's
  *     OTHER line closes the trade and arms that line for the next entry (same cycle, no fresh touch).
- *     Touch memory (custom only): a touch is kept per line and per cycle, recorded even while a trade is
- *     open, not wiped by exits, used up by an entry, and valid for N candles — so a candle that closes
- *     beyond a line the price just touched can be traded right after an exit.
+ *     Re-touch rules (custom only): a touch stays valid until an entry uses it (no time limit);
+ *     after a stop loss (candle closes back through the line) the SL line stays armed, so the next candle
+ *     that meets the entry condition can trade at once; after a target exit (trade / cycle / day profit)
+ *     a fresh touch of either line of the current hour is needed.
  *
  * Levels and signals come from the NIFTY index chart, trades are NIFTY options.
  *   - 5 hourly ranges: 09:15-10:15, 10:15-11:15, 11:15-12:15, 12:15-13:15, 13:15-14:15.
@@ -63,8 +64,7 @@ const FIXED_RULES = {
   tradeMaxProfit: null,   // per-trade profit exit (rupees)
   touchBuffer: 0,         // NIFTY within this many points of a line counts as touching it
   includeCandles: false,  // return the day's NIFTY candles of the entry timeframe
-  retainTouches: false,   // custom: keep touches per line / cycle across trades (see header)
-  touchMemory: 0,         // custom: candles (of the entry timeframe) a touch stays valid
+  slKeepsLine: false,     // custom: after an SL the SL line stays armed (no fresh touch needed)
 };
 const STRIKE_STEP = 50;
 
@@ -101,7 +101,6 @@ class HourlyRangeDaySim {
     this.index = index;       // NIFTY 1-min bars { hhmm: [o, h, l, c] }
     this.cycles = CYCLE_DEFS.map((d) => ({
       ...d, high: null, low: null, ready: false, pnl: 0, entries: 0, stoppedBy: null,
-      touched: { HIGH: null, LOW: null },   // minute each line was last touched (touch memory mode)
     }));
     this.active = null;       // cycle whose High / Low can be touched
     this.touch = null;        // { line: "HIGH" | "LOW", value, time }
@@ -153,18 +152,7 @@ class HourlyRangeDaySim {
       this.log("ACTIVE", `C${latest.k} lines active: High ${latest.high} / Low ${latest.low} (trades until ${latest.windowEnd})` +
         (latest.stoppedBy ? ` — cycle already stopped (${latest.stoppedBy})` : ""), { cycle: latest.k });
     }
-    if (!this.rules.retainTouches) this.touch = null;
-  }
-
-  // lines of a cycle whose touch is still fresh enough to trade (touch memory mode)
-  touchedLines(cycle) {
-    const out = [];
-    for (const [line, value] of [["HIGH", cycle.high], ["LOW", cycle.low]]) {
-      const t = cycle.touched[line];
-      // age in candles of the entry timeframe: 3 candles = 3 min on 1m, 9 min on 3m, 15 min on 5m
-      if (t !== null && (toMin(this.now) - toMin(t)) / this.candleMinutes <= this.rules.touchMemory) out.push({ line, value, time: t });
-    }
-    return out;
+    this.touch = null;
   }
 
   canEnter() {
@@ -183,16 +171,14 @@ class HourlyRangeDaySim {
       line: via.line, lineValue: via.value, signal: { ...candle, avg: round(avg) },
     };
     if (!this.legs[side].strikes.includes(strike)) this.legs[side].strikes.push(strike);
-    const reason = `NIFTY ${this.candleMinutes}-min close ${candle.close} ${side === "CE" ? ">" : "<"} ${via.line} ${via.value}, avg ${round(avg)}` +
-      (this.rules.retainTouches ? ` (line touched ${via.time})` : "");
+    const reason = `NIFTY ${this.candleMinutes}-min close ${candle.close} ${side === "CE" ? ">" : "<"} ${via.line} ${via.value}, avg ${round(avg)}`;
     this.pos.reason = reason;
     const max = Number.isFinite(this.rules.maxEntries) ? `/${this.rules.maxEntries}` : "";
     this.log("ENTRY", `C${c.k} BUY ${side} ${strike} @ ${price.toFixed(2)} (entry ${c.entries}${max}) | ${reason}`, {
       cycle: c.k, side, strike, price: round(price),
     });
-    // used: the next entry needs a fresh touch (in touch memory mode: a touch from now on, even during this trade)
-    if (this.rules.retainTouches) c.touched = { HIGH: null, LOW: null };
-    else this.touch = null;
+    // used: the next entry needs a touch (after an SL the SL line is re-armed in exit())
+    this.touch = null;
   }
 
   exit(price, reason, kind) {
@@ -249,6 +235,11 @@ class HourlyRangeDaySim {
       }
     }
     if (kind !== "FORCE") this.activateLatest();
+    // after a stop loss the SL line stays armed: the next qualifying candle can re-enter without a new touch
+    if (kind === "SL" && r.slKeepsLine && this.active === c && !c.stoppedBy && !this.dayStoppedBy) {
+      this.touch = { line: p.line, value: p.lineValue, time: this.now };
+      this.log("TOUCH", `C${c.k} ${p.line} ${p.lineValue} stays armed after the stop loss (no fresh touch needed)`, { cycle: c.k, line: p.line, value: p.lineValue });
+    }
   }
 
   // ---------- entry-timeframe candle close ----------
@@ -274,20 +265,10 @@ class HourlyRangeDaySim {
     const sideFor = (L) => (c > L && avg > L && avg < c ? "CE" : c < L && avg < L && avg > c ? "PE" : null);
 
     let pick = null; // { line, value, side, time? }
-    if (this.rules.retainTouches) {
-      // every line of the active cycle that is still touched; if several fit, the most recently touched wins
-      const fits = this.touchedLines(this.active)
-        .map((t) => ({ ...t, side: sideFor(t.value) }))
-        .filter((t) => t.side);
-      if (!fits.length) return;
-      fits.sort((a, b) => toMin(b.time) - toMin(a.time) || Math.abs(a.value - c) - Math.abs(b.value - c));
-      pick = fits[0];
-    } else {
-      if (!this.touch) return;
-      const side = sideFor(this.touch.value);
-      if (!side) return;
-      pick = { line: this.touch.line, value: this.touch.value, side };
-    }
+    if (!this.touch) return;
+    const side0 = sideFor(this.touch.value);
+    if (!side0) return;
+    pick = { line: this.touch.line, value: this.touch.value, side: side0 };
     const side = pick.side;
 
     // ATM from the signal close, then n strikes in-the-money: CE below ATM, PE above
@@ -370,8 +351,7 @@ class HourlyRangeDaySim {
     if (!(lo <= value + b && hi >= value - b)) return;
     const cycle = p.cycle;
     this.exit(optionBar ? optionBar[3] : p.ltp, `NIFTY touched C${cycle.k} ${line} ${value} (other line)`, "LINE_TOUCH");
-    // touch memory mode: nothing to do here, the touch is recorded (and logged) by the recorder later this minute
-    if (!this.rules.retainTouches && this.active === cycle && !cycle.stoppedBy && !this.dayStoppedBy) {
+    if (this.active === cycle && !cycle.stoppedBy && !this.dayStoppedBy) {
       this.touch = { line, value, time: this.now };
       this.log("TOUCH", `C${cycle.k} ${line} ${value} armed by the exit touch (no fresh touch needed)`, { cycle: cycle.k, line, value });
     }
@@ -379,29 +359,7 @@ class HourlyRangeDaySim {
 
   // ---------- index ticks: line touches ----------
 
-  // touch memory mode: a touch is a fact about the line, so it is recorded whether or not a trade is
-  // open, for the newest completed cycle (the one that becomes active once any open trade is closed)
-  recordTouches(bar, prevClose) {
-    const cycle = [...this.cycles].reverse().find((x) => x.ready);
-    if (!cycle || cycle.stoppedBy || this.dayStoppedBy) return;
-    const lo = Math.min(bar[2], prevClose ?? bar[2]);
-    const hi = Math.max(bar[1], prevClose ?? bar[1]);
-    const b = this.rules.touchBuffer;
-    for (const [line, value] of [["HIGH", cycle.high], ["LOW", cycle.low]]) {
-      if (!(lo <= value + b && hi >= value - b)) continue;
-      const prev = cycle.touched[line];
-      cycle.touched[line] = this.now;
-      // log a touch once per visit to the line, not on every minute spent at it
-      if (prev === null || toMin(this.now) - toMin(prev) > 1) {
-        this.log("TOUCH", `NIFTY touched C${cycle.k} ${line} ${value}` + (this.pos ? " (while a trade is open)" : ""), {
-          cycle: cycle.k, line, value,
-        });
-      }
-    }
-  }
-
   updateTouch(bar, prevClose) {
-    if (this.rules.retainTouches) return this.recordTouches(bar, prevClose);
     if (!this.active || this.pos || this.active.stoppedBy || this.dayStoppedBy) return;
     const lo = Math.min(bar[2], prevClose ?? bar[2]);
     const hi = Math.max(bar[1], prevClose ?? bar[1]);
@@ -682,7 +640,6 @@ async function runHourlyRangeTouch(input, { strategy, rules }) {
       dayMaxProfit: rules.dayMaxProfit,
       tradeMaxProfit: rules.tradeMaxProfit,
       touchBufferPoints: rules.touchBuffer,
-      touchMemoryCandles: rules.retainTouches ? rules.touchMemory : null,
       maxEntriesPerCycle: Number.isFinite(rules.maxEntries) ? rules.maxEntries : "no limit",
       otherLineExit: rules.otherLineExit
         ? "a NIFTY tick touching the cycle's other line exits; that line stays armed in the same cycle"
@@ -722,7 +679,6 @@ export const CUSTOM_DEFAULTS = {
   timeframe: 3,
   strike: "ITM2",
   touchBuffer: 3,
-  touchMemory: 3,
   daySl: { enabled: false, value: 7000 },
   cycleSl: { enabled: true, value: 3500 },
   dayProfit: { enabled: false, value: 10000 },
@@ -762,10 +718,6 @@ function customRules(raw = {}) {
   if (!Number.isFinite(touchBuffer) || touchBuffer < 0 || touchBuffer > 100) {
     errors.push("options.touchBuffer must be between 0 and 100 (NIFTY points)");
   }
-  const touchMemory = o.touchMemory === undefined ? CUSTOM_DEFAULTS.touchMemory : Number(o.touchMemory);
-  if (!Number.isFinite(touchMemory) || touchMemory < 1 || touchMemory > 100) {
-    errors.push("options.touchMemory must be between 1 and 100 (candles)");
-  }
   if (errors.length) throw new BacktestError("Invalid options", 400, errors);
 
   return {
@@ -779,8 +731,7 @@ function customRules(raw = {}) {
     strikeOffset: STRIKES[strike],
     tradeMaxProfit: tradeProfit,
     touchBuffer,
-    retainTouches: true,
-    touchMemory,
+    slKeepsLine: true,
     includeCandles: true,
   };
 }
