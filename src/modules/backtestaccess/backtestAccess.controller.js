@@ -82,7 +82,11 @@ export const myStrategies = async (req, res) => {
 // one run per user at a time (each run is ~42-126 Dhan calls)
 const running = new Set();
 
-// POST /api/backtest-access/my/run/:key   body: { date: "YYYY-MM-DD", options? (strategies with settings) }
+// strategies where a user may pick a date range (everything else: one day), capped to protect the platform's Dhan quota
+const RANGE_KEYS = new Set(["nifty_hourly_range_touch_custom"]);
+const MAX_USER_RANGE_DAYS = 31;
+
+// POST /api/backtest-access/my/run/:key   body: { date: "YYYY-MM-DD", toDate?: "YYYY-MM-DD" (range strategies only), options? (strategies with settings) }
 export const runMyBacktest = async (req, res) => {
   const { key } = req.params;
   const userId = req.user.id;
@@ -92,6 +96,18 @@ export const runMyBacktest = async (req, res) => {
   if (!strategy) return res.status(404).json({ success: false, message: "Backtest strategy not found" });
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date || "")) {
     return res.status(400).json({ success: false, message: "date is required as YYYY-MM-DD" });
+  }
+  let toDate = date;
+  if (req.body?.toDate !== undefined && req.body.toDate !== date) {
+    if (!RANGE_KEYS.has(key)) return res.status(400).json({ success: false, message: "This backtest runs one day at a time" });
+    toDate = req.body.toDate;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(toDate || "") || toDate < date) {
+      return res.status(400).json({ success: false, message: "toDate must be YYYY-MM-DD and not before date" });
+    }
+    const span = Math.round((Date.parse(toDate) - Date.parse(date)) / 86400000) + 1;
+    if (span > MAX_USER_RANGE_DAYS) {
+      return res.status(400).json({ success: false, message: `Pick at most ${MAX_USER_RANGE_DAYS} days per run` });
+    }
   }
   if (running.has(userId)) {
     return res.status(429).json({ success: false, message: "A backtest is already running for you — wait for it to finish" });
@@ -105,8 +121,8 @@ export const runMyBacktest = async (req, res) => {
     }
 
     const creds = await service.getPlatformDhanCredentials();
-    // users run one day at a time; same date checks as the admin API
-    const input = validateBacktestInput({ ...creds, fromDate: date, toDate: date, includeEvents: true, options: req.body?.options });
+    // same date checks as the admin API; one day, or a range for RANGE_KEYS (day details are left out of range runs)
+    const input = validateBacktestInput({ ...creds, fromDate: date, toDate, includeEvents: toDate === date, options: req.body?.options });
     const result = await strategy.run(input);
 
     await service.logRunService({
