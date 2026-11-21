@@ -10,9 +10,13 @@
  *     replaces the mark until an entry happens.
  *   - entry: any tick at or above mark HIGH + 4 buys 1 lot (gap above -> filled at the open tick).
  *   - initial SL: the low of the 15-minute candle the entry happened in (its low up to the entry tick).
- *   - after the entry the option is tracked on 5-minute Heikin Ashi candles (seeded from 09:15). Every
- *     5-minute candle that completes after the entry moves the SL to that Heikin Ashi candle's low
- *     (up OR down); the 5-minute candle the entry happened in counts as the first one.
+ *   - after the entry the option is tracked on 5-minute Heikin Ashi candles. Heikin Ashi is recursive
+ *     (open = average of the previous HA open and close), so a chart's values depend on every candle
+ *     before them. The series is therefore warmed up on the same strike's previous trading day and
+ *     continues into today, like a chart does; its error halves with every candle, so it is gone long
+ *     before 09:30. Every 5-minute candle that completes after the entry moves the SL to that Heikin
+ *     Ashi candle's low MINUS 2 points (up OR down); the first SL (entry candle low) has no offset.
+ *     The 5-minute candle the entry happened in counts as the first one.
  *   - any tick at or below the SL exits (gap below -> filled at the open tick).
  *   - after an exit a FRESH bearish 15-minute candle is needed: it must start after the exit bar, the
  *     candle that was still forming when the SL hit does not count. Then HIGH + 4 again.
@@ -31,6 +35,8 @@ const TARGET_PRICE = 200;          // lowest price still at or above this wins
 const ENTRY_CANDLE_MIN = 15;
 const TRACK_CANDLE_MIN = 5;
 const ENTRY_BUFFER = 4;            // entry = bearish high + 4
+const TRAIL_OFFSET = 2;            // trailing stop = Heikin Ashi low - 2 (not the first SL)
+const MIN_WARMUP_CANDLES = 20;     // fewer previous-day 5-min candles than this -> Heikin Ashi seeded from today's first candle
 const TRADE_START = "09:30";
 const LOTS = 1;
 const EPS = 1e-9;
@@ -48,11 +54,10 @@ const bucketStart = (bucket, size) => toHHMM(toMin("09:15") + bucket * size);
 // =========================
 
 class BearishBreakoutDaySim {
-  static needsPrev = false; // only today's bars are used
-
-  constructor(day, todayData) {
+  constructor(day, todayData, prevData) {
     this.day = day;
     this.data = todayData;
+    this.prev = prevData;   // previous trading day, same contracts: only used to warm up Heikin Ashi
     this.legs = { CE: this.initLeg("CE"), PE: this.initLeg("PE") };
     this.trades = [];
     this.events = [];
@@ -60,6 +65,7 @@ class BearishBreakoutDaySim {
     this.dayClosed = false;
     this.closeReason = null;
     this.selection = {};
+    this.warmup = {};
   }
 
   initLeg(name) {
@@ -82,7 +88,7 @@ class BearishBreakoutDaySim {
   }
 
   dayExtras() {
-    const out = { selection: this.selection, legCandles: {} };
+    const out = { selection: this.selection, haWarmup: this.warmup, legCandles: {} };
     for (const side of ["CE", "PE"]) {
       const l = this.legs[side];
       out.legCandles[side] = { strike: l.strike, candles15: l.candles15, ha5: l.ha5 };
@@ -121,6 +127,43 @@ class BearishBreakoutDaySim {
     return null;
   }
 
+  // ---------- Heikin Ashi warm-up ----------
+
+  /** run the HA recurrence over the strike's previous-day 5-min candles so today starts from a chart-like state */
+  warmUpHa(leg) {
+    const bars = this.prev?.[leg.name]?.get(leg.strike);
+    const candles = [];
+    if (bars) {
+      for (const hhmm of minutesBetween("09:15", "15:29")) {
+        const b = bars[hhmm];
+        if (!b) continue;
+        const k = bucketOf(hhmm, TRACK_CANDLE_MIN);
+        const c = candles[candles.length - 1];
+        if (!c || c.k !== k) candles.push({ k, open: b[0], high: b[1], low: b[2], close: b[3] });
+        else {
+          c.high = Math.max(c.high, b[1]);
+          c.low = Math.min(c.low, b[2]);
+          c.close = b[3];
+        }
+      }
+    }
+    if (candles.length < MIN_WARMUP_CANDLES) {
+      this.warmup[leg.name] = { candles: candles.length, used: false };
+      this.now = "09:15";
+      this.log("WARN", `${leg.name} ${leg.strike}: only ${candles.length} previous-day 5-min candles, Heikin Ashi starts from today's first candle ` +
+        "(the first candles of the day can differ from a chart)", { side: leg.name });
+      return;
+    }
+    let prev = null;
+    for (const c of candles) {
+      const close = (c.open + c.high + c.low + c.close) / 4;
+      const open = prev ? (prev.open + prev.close) / 2 : (c.open + c.close) / 2;
+      prev = { open, close };
+    }
+    leg.haPrev = prev;
+    this.warmup[leg.name] = { candles: candles.length, used: true };
+  }
+
   // ---------- candles ----------
 
   /** a completed 15-min candle: the latest bearish one (that started after the last exit) becomes the mark */
@@ -153,11 +196,12 @@ class BearishBreakoutDaySim {
     });
     if (leg.pos) {
       const old = leg.pos.sl;
-      leg.pos.sl = round(haLow, 4);
+      const sl = round(haLow - TRAIL_OFFSET, 4);
+      leg.pos.sl = sl;
       leg.pos.slKind = "HA";
-      leg.pos.slMoves.push({ time: this.now, candle: c.start, sl: round(haLow) });
-      this.log("TRAIL", `${leg.name} 5-min Heikin Ashi ${c.start} completed, low ${round(haLow)} -> stop ${round(old)} -> ${round(haLow)}`, {
-        side: leg.name, sl: round(haLow),
+      leg.pos.slMoves.push({ time: this.now, candle: c.start, haLow: round(haLow), sl: round(sl) });
+      this.log("TRAIL", `${leg.name} 5-min Heikin Ashi ${c.start} completed, low ${round(haLow)} - ${TRAIL_OFFSET} -> stop ${round(old)} -> ${round(sl)}`, {
+        side: leg.name, sl: round(sl),
       });
     }
   }
@@ -241,7 +285,7 @@ class BearishBreakoutDaySim {
       if (price <= leg.pos.sl + EPS) {
         const trail = leg.pos.slKind === "HA";
         this.exit(leg, price, trail
-          ? `Tick ${price.toFixed(2)} <= Heikin Ashi stop ${round(leg.pos.sl)}`
+          ? `Tick ${price.toFixed(2)} <= Heikin Ashi low - ${TRAIL_OFFSET} = ${round(leg.pos.sl)}`
           : `Tick ${price.toFixed(2)} <= entry candle low ${round(leg.pos.sl)}`, trail ? "TRAIL" : "SL");
       }
       return;
@@ -306,6 +350,7 @@ class BearishBreakoutDaySim {
   run() {
     const err = this.select();
     if (err) return err;
+    for (const side of ["CE", "PE"]) this.warmUpHa(this.legs[side]);
     for (const side of ["CE", "PE"]) {
       const s = this.selection[side];
       this.now = STRIKE_TIME;
@@ -371,6 +416,8 @@ export async function runNiftyBearishBreakoutOptionBuyingBacktest(input) {
       analysis.push(`${trades.length} trades: ${sl.length} stopped at the entry-candle low (net ${net(sl)}), ${tr.length} on the ` +
         `Heikin Ashi trail (net ${net(tr)}), ${fo.length} squared off at 15:14 (net ${net(fo)}). Avg win ${inr(summary.avgWin)} vs avg loss ${inr(summary.avgLoss)}.`);
     }
+    const cold = run.days.filter((d) => d.status === "ok" && d.haWarmup && Object.values(d.haWarmup).some((w) => !w.used)).length;
+    if (cold) analysis.push(`${cold} day(s) had too little previous-day data to warm up Heikin Ashi, so their first candles can differ from a chart.`);
     const gaps = run.days.filter((d) => d.status === "ok").reduce((s, d) => s + (d.dataGaps || 0), 0);
     if (gaps) analysis.push(`Data gaps: ${gaps} minute(s) had no bar for the chosen strike, so candles there are built from fewer bars.`);
     analysis.push(...tail.filter((x) => !x.startsWith("Best pivot")));
@@ -389,7 +436,8 @@ export async function runNiftyBearishBreakoutOptionBuyingBacktest(input) {
       trackCandleMinutes: TRACK_CANDLE_MIN,
       entryBuffer: ENTRY_BUFFER,
       initialSl: "low of the 15-min candle the entry happened in",
-      trailing: "5-min Heikin Ashi: every candle that completes after the entry moves the stop to its low (up or down)",
+      trailing: `5-min Heikin Ashi (warmed up on the previous trading day): every candle that completes after the entry moves the stop to its low - ${TRAIL_OFFSET} (up or down); the first stop is the entry candle low`,
+      trailOffset: TRAIL_OFFSET,
       reentry: "a fresh bearish 15-min candle that starts after the exit, then a tick above its high + 4",
       tradeStart: TRADE_START,
       tradeEnd: TRADE_END,
