@@ -476,8 +476,115 @@ async function runHourlyRangeTouch(input, { strategy, rules }) {
   const errors = [];
   let cumulative = 0;
 
+  const assemble = () => {
+    const sum = summarize(days, LOTS);
+    let summary = null;
+    let analysis = ["No traded days in this range."];
+    if (sum) {
+      const { trades, head, tail } = sum;
+      summary = { ...sum.summary };
+      delete summary.byPivot;
+      const byCycle = {};
+      for (const t of trades) {
+        const k = `C${t.cycle}`;
+        byCycle[k] = byCycle[k] || { trades: 0, pnl: 0 };
+        byCycle[k].trades += 1;
+        byCycle[k].pnl = round(byCycle[k].pnl + t.pnl);
+      }
+      summary.byCycle = byCycle;
+      const okDays = days.filter((d) => d.status === "ok");
+      const allCycles = okDays.flatMap((d) => d.cycles);
+      summary.cycleStops = {
+        maxLoss: allCycles.filter((c) => c.stoppedBy === "MAX LOSS").length,
+        maxProfit: allCycles.filter((c) => c.stoppedBy === "MAX PROFIT").length,
+        ...(rules.maxEntries === 2 ? { twoEntriesUsed: allCycles.filter((c) => c.stoppedBy === "2 ENTRIES USED").length } : {}),
+      };
+      summary.dayStops = {
+        maxLoss: okDays.filter((d) => d.dayStoppedBy === "DAY MAX LOSS").length,
+        maxProfit: okDays.filter((d) => d.dayStoppedBy === "DAY MAX PROFIT").length,
+      };
+
+      analysis = [...head];
+      if (trades.length) {
+        const ce = trades.filter((t) => t.side === "CE").length;
+        analysis.push(`${trades.length} trades (${ce} CE / ${trades.length - ce} PE). Exits: ` +
+          Object.entries(summary.exits).map(([k, v]) => `${k} ${v}`).join(", ") +
+          `. Avg win ${inr(summary.avgWin)} vs avg loss ${inr(summary.avgLoss)}.`);
+        const stops = [];
+        if (rules.cycleMaxLoss !== null) stops.push(`by the ${inr(-rules.cycleMaxLoss)} cycle loss limit: ${summary.cycleStops.maxLoss}`);
+        if (rules.cycleMaxProfit !== null) stops.push(`by the ${inr(rules.cycleMaxProfit)} cycle profit limit: ${summary.cycleStops.maxProfit}`);
+        if (rules.maxEntries === 2) stops.push(`after 2 entries: ${summary.cycleStops.twoEntriesUsed}`);
+        if (stops.length) analysis.push(`Cycles stopped ${stops.join(", ")}.`);
+        if (rules.dayMaxLoss !== null || rules.dayMaxProfit !== null) {
+          analysis.push(`Days stopped early: ${summary.dayStops.maxLoss} by the day loss limit, ${summary.dayStops.maxProfit} by the day profit limit.`);
+        }
+        if (rules.otherLineExit) {
+          const lt = trades.filter((t) => t.exitType === "LINE_TOUCH");
+          analysis.push(`${lt.length} trades exited on the other-line touch, net ${inr(lt.reduce((a, t) => a + t.pnl, 0))}.`);
+        }
+        const cyc = Object.entries(byCycle).sort((a, b) => b[1].pnl - a[1].pnl);
+        if (cyc.length > 1) {
+          analysis.push(`Best cycle: ${cyc[0][0]} (${cyc[0][1].trades} trades, ${inr(cyc[0][1].pnl)}); ` +
+            `worst: ${cyc[cyc.length - 1][0]} (${cyc[cyc.length - 1][1].trades} trades, ${inr(cyc[cyc.length - 1][1].pnl)}).`);
+        }
+      }
+      analysis.push(...tail.filter((x) => !x.startsWith("Best pivot")));
+    }
+
+    const tradingDays = days.filter((d) => d.status !== "holiday");
+    return {
+      success: !(tradingDays.length > 0 && tradingDays.every((d) => d.status === "error")),
+      strategy,
+      params: {
+        fromDate: input.fromDate,
+        toDate: input.toDate,
+        lotSize: LOTSIZE,
+        lots: LOTS,
+        cycles: CYCLE_DEFS.map((c) => ({ cycle: c.k, range: [c.rangeStart, c.readyAt], window: [c.readyAt, c.windowEnd] })),
+        candleMinutes,
+        confirmation: `avg = (O+H+L+C)/4 of the ${candleMinutes}-min NIFTY candle: CE line < avg < close, PE close < avg < line`,
+        strike: `${strikeLabel(rules.strikeOffset)} from the signal candle close (ATM = nearest ${STRIKE_STEP}), nearest weekly expiry`,
+        stopLoss: `${candleMinutes}-min NIFTY close back through the entry line`,
+        cycleMaxLoss: rules.cycleMaxLoss,
+        cycleMaxProfit: rules.cycleMaxProfit,
+        dayMaxLoss: rules.dayMaxLoss,
+        dayMaxProfit: rules.dayMaxProfit,
+        tradeMaxProfit: rules.tradeMaxProfit,
+        touchBufferPoints: rules.touchBuffer,
+        maxEntriesPerCycle: Number.isFinite(rules.maxEntries) ? rules.maxEntries : "no limit",
+        otherLineExit: rules.otherLineExit
+          ? "a NIFTY tick touching the cycle's other line exits; that line stays armed in the same cycle"
+          : false,
+        dayClose: DAY_CLOSE,
+      },
+      summary,
+      analysis,
+      days,
+      errors,
+      logs: log.entries,
+      meta: {
+        apiCalls: dh.calls,
+        durationSec: round((Date.now() - started) / 1000, 1),
+        dataSource: "Dhan /v2/charts/intraday (NIFTY index 1-min) + /v2/charts/rollingoption (options, ATM±10)",
+      },
+    };
+  };
+
+  // background jobs: progress / partial results after every day, and a way to stop early
+  let totalDays = 0;
+  for (let d = input.fromDate; d <= input.toDate; d = addDays(d, 1)) if (!isWeekend(d)) totalDays += 1;
+  let doneDays = 0;
+  let cancelled = false;
+
   for (let day = input.fromDate; day <= input.toDate; day = addDays(day, 1)) {
     if (isWeekend(day)) continue;
+    if (input.onUpdate) input.onUpdate({ result: assemble(), progress: { done: doneDays, total: totalDays, date: day } });
+    if (input.isCancelled?.()) {
+      cancelled = true;
+      log.warn("stopped by the user");
+      break;
+    }
+    doneDays += 1;
     const rec = { date: day, day: dowName(day) };
 
     let options;
@@ -559,7 +666,7 @@ async function runHourlyRangeTouch(input, { strategy, rules }) {
       ...(rules.otherLineExit ? { lineTouchExits: sim.trades.filter((x) => x.exitType === "LINE_TOUCH").length } : {}),
       dayStoppedBy: sim.dayStoppedBy,
       cycles: sim.cycleReport(),
-      ...(rules.includeCandles ? { indexCandles: sim.indexCandles() } : {}),
+      ...(rules.includeCandles && !input.slim ? { indexCandles: sim.indexCandles() } : {}),
       trades: sim.trades,
     };
     if (input.includeEvents) out.events = sim.events;
@@ -567,97 +674,10 @@ async function runHourlyRangeTouch(input, { strategy, rules }) {
     log.info(`CE ${ce.pnl} | PE ${pe.pnl} | day ${dayPnl} | trades ${sim.trades.length}`, day);
   }
 
-  const sum = summarize(days, LOTS);
-  let summary = null;
-  let analysis = ["No traded days in this range."];
-  if (sum) {
-    const { trades, head, tail } = sum;
-    summary = { ...sum.summary };
-    delete summary.byPivot;
-    const byCycle = {};
-    for (const t of trades) {
-      const k = `C${t.cycle}`;
-      byCycle[k] = byCycle[k] || { trades: 0, pnl: 0 };
-      byCycle[k].trades += 1;
-      byCycle[k].pnl = round(byCycle[k].pnl + t.pnl);
-    }
-    summary.byCycle = byCycle;
-    const okDays = days.filter((d) => d.status === "ok");
-    const allCycles = okDays.flatMap((d) => d.cycles);
-    summary.cycleStops = {
-      maxLoss: allCycles.filter((c) => c.stoppedBy === "MAX LOSS").length,
-      maxProfit: allCycles.filter((c) => c.stoppedBy === "MAX PROFIT").length,
-      ...(rules.maxEntries === 2 ? { twoEntriesUsed: allCycles.filter((c) => c.stoppedBy === "2 ENTRIES USED").length } : {}),
-    };
-    summary.dayStops = {
-      maxLoss: okDays.filter((d) => d.dayStoppedBy === "DAY MAX LOSS").length,
-      maxProfit: okDays.filter((d) => d.dayStoppedBy === "DAY MAX PROFIT").length,
-    };
-
-    analysis = [...head];
-    if (trades.length) {
-      const ce = trades.filter((t) => t.side === "CE").length;
-      analysis.push(`${trades.length} trades (${ce} CE / ${trades.length - ce} PE). Exits: ` +
-        Object.entries(summary.exits).map(([k, v]) => `${k} ${v}`).join(", ") +
-        `. Avg win ${inr(summary.avgWin)} vs avg loss ${inr(summary.avgLoss)}.`);
-      const stops = [];
-      if (rules.cycleMaxLoss !== null) stops.push(`by the ${inr(-rules.cycleMaxLoss)} cycle loss limit: ${summary.cycleStops.maxLoss}`);
-      if (rules.cycleMaxProfit !== null) stops.push(`by the ${inr(rules.cycleMaxProfit)} cycle profit limit: ${summary.cycleStops.maxProfit}`);
-      if (rules.maxEntries === 2) stops.push(`after 2 entries: ${summary.cycleStops.twoEntriesUsed}`);
-      if (stops.length) analysis.push(`Cycles stopped ${stops.join(", ")}.`);
-      if (rules.dayMaxLoss !== null || rules.dayMaxProfit !== null) {
-        analysis.push(`Days stopped early: ${summary.dayStops.maxLoss} by the day loss limit, ${summary.dayStops.maxProfit} by the day profit limit.`);
-      }
-      if (rules.otherLineExit) {
-        const lt = trades.filter((t) => t.exitType === "LINE_TOUCH");
-        analysis.push(`${lt.length} trades exited on the other-line touch, net ${inr(lt.reduce((a, t) => a + t.pnl, 0))}.`);
-      }
-      const cyc = Object.entries(byCycle).sort((a, b) => b[1].pnl - a[1].pnl);
-      if (cyc.length > 1) {
-        analysis.push(`Best cycle: ${cyc[0][0]} (${cyc[0][1].trades} trades, ${inr(cyc[0][1].pnl)}); ` +
-          `worst: ${cyc[cyc.length - 1][0]} (${cyc[cyc.length - 1][1].trades} trades, ${inr(cyc[cyc.length - 1][1].pnl)}).`);
-      }
-    }
-    analysis.push(...tail.filter((x) => !x.startsWith("Best pivot")));
-  }
-
-  const tradingDays = days.filter((d) => d.status !== "holiday");
-  return {
-    success: !(tradingDays.length > 0 && tradingDays.every((d) => d.status === "error")),
-    strategy,
-    params: {
-      fromDate: input.fromDate,
-      toDate: input.toDate,
-      lotSize: LOTSIZE,
-      lots: LOTS,
-      cycles: CYCLE_DEFS.map((c) => ({ cycle: c.k, range: [c.rangeStart, c.readyAt], window: [c.readyAt, c.windowEnd] })),
-      candleMinutes,
-      confirmation: `avg = (O+H+L+C)/4 of the ${candleMinutes}-min NIFTY candle: CE line < avg < close, PE close < avg < line`,
-      strike: `${strikeLabel(rules.strikeOffset)} from the signal candle close (ATM = nearest ${STRIKE_STEP}), nearest weekly expiry`,
-      stopLoss: `${candleMinutes}-min NIFTY close back through the entry line`,
-      cycleMaxLoss: rules.cycleMaxLoss,
-      cycleMaxProfit: rules.cycleMaxProfit,
-      dayMaxLoss: rules.dayMaxLoss,
-      dayMaxProfit: rules.dayMaxProfit,
-      tradeMaxProfit: rules.tradeMaxProfit,
-      touchBufferPoints: rules.touchBuffer,
-      maxEntriesPerCycle: Number.isFinite(rules.maxEntries) ? rules.maxEntries : "no limit",
-      otherLineExit: rules.otherLineExit
-        ? "a NIFTY tick touching the cycle's other line exits; that line stays armed in the same cycle"
-        : false,
-      dayClose: DAY_CLOSE,
-    },
-    summary,
-    analysis,
-    days,
-    errors,
-    logs: log.entries,
-    meta: {
-      apiCalls: dh.calls,
-      durationSec: round((Date.now() - started) / 1000, 1),
-      dataSource: "Dhan /v2/charts/intraday (NIFTY index 1-min) + /v2/charts/rollingoption (options, ATM±10)",
-    },
-  };
+  const final = assemble();
+  if (cancelled) final.cancelled = true;
+  if (input.onUpdate) input.onUpdate({ result: final, progress: { done: doneDays, total: totalDays, date: null } });
+  return final;
 }
 
 // version 1: 3-min entry candles
@@ -736,6 +756,11 @@ function customRules(raw = {}) {
     includeCandles: true,
   };
 }
+
+/** throws BacktestError(400) for bad options, so a job can be refused before it starts */
+export const validateCustomOptions = (options) => {
+  customRules(options);
+};
 
 // custom: 1 / 3 / 5-min candles, optional day / cycle SL and profit, no entry limit, other-line exit
 export const runNiftyHourlyRangeTouchCustomBacktest = (input) =>

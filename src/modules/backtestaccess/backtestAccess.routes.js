@@ -10,6 +10,9 @@ import {
   searchUsers,
   myStrategies,
   runMyBacktest,
+  startMyBacktestJob,
+  getMyBacktestJob,
+  cancelMyBacktestJob,
 } from "./backtestAccess.controller.js";
 
 const router = express.Router();
@@ -25,5 +28,8 @@ router.get("/users/search", authenticate, authorize("superadmin"), searchUsers);
 /* USER — allowed strategies, run one day with the platform Dhan data */
 router.get("/my/strategies", authenticate, myStrategies);
 router.post("/my/run/:key", authenticate, runMyBacktest);
+router.post("/my/start/:key", authenticate, startMyBacktestJob);
+router.get("/my/jobs/:id", authenticate, getMyBacktestJob);
+router.post("/my/jobs/:id/cancel", authenticate, cancelMyBacktestJob);
 
 export default router;

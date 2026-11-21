@@ -3,6 +3,7 @@ import * as pivotBufferService from "./pivotBuffer.service.js";
 import * as pivotFixedTargetService from "./pivotFixedTarget.service.js";
 import * as levelBreakoutService from "./levelBreakout.service.js";
 import * as hourlyRangeService from "./hourlyRange.service.js";
+import { startJob, getJob, cancelJob } from "./backtestJobs.js";
 
 // same input checks, status codes and error shape for every backtest endpoint
 const runBacktest = (runner) => async (req, res) => {
@@ -57,3 +58,41 @@ export const niftyHourlyRangeTouch1m = runBacktest(hourlyRangeService.runNiftyHo
 
 // POST /api/backtest/nifty_hourly_range_touch_custom   body adds: options { timeframe, daySl, cycleSl, dayProfit, cycleProfit }
 export const niftyHourlyRangeTouchCustom = runBacktest(hourlyRangeService.runNiftyHourlyRangeTouchCustomBacktest);
+
+// ---------- background date-range runs (custom hourly strategy) ----------
+
+// POST /api/backtest/nifty_hourly_range_touch_custom/start   same body as the plain run -> { jobId }
+export const startHourlyCustomJob = (req, res) => {
+  try {
+    const input = backtestService.validateBacktestInput(req.body);
+    hourlyRangeService.validateCustomOptions(input.options);
+    // the Dhan client id is the owner: one running range job per account
+    const jobId = startJob({
+      owner: `dhan:${input.clientId}`,
+      key: "nifty_hourly_range_touch_custom",
+      input,
+      run: hourlyRangeService.runNiftyHourlyRangeTouchCustomBacktest,
+    });
+    res.status(202).json({ success: true, jobId });
+  } catch (err) {
+    const status = err.status || 400;
+    res.status(status).json({
+      success: false,
+      message: err.message,
+      errors: Array.isArray(err.details) ? err.details : [err.message],
+    });
+  }
+};
+
+// GET /api/backtest/jobs/:id
+export const getBacktestJob = (req, res) => {
+  const job = getJob(req.params.id);
+  if (!job) return res.status(404).json({ success: false, message: "Backtest job not found (finished a long time ago, or the server restarted)" });
+  res.status(200).json({ success: true, ...job });
+};
+
+// POST /api/backtest/jobs/:id/cancel
+export const cancelBacktestJob = (req, res) => {
+  if (!cancelJob(req.params.id)) return res.status(404).json({ success: false, message: "Backtest job not found" });
+  res.status(200).json({ success: true });
+};
