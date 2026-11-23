@@ -10,9 +10,11 @@
  *       sell below   = open - range,   sell target n = sell below - n * range (reference only)
  *   - 5-minute candles built from the 1-min bars (09:15, 09:20, ...)
  *   - entry: 5-min candle closes above buy above -> buy 1 lot at the next tick
- *   - initial SL: any tick <= entry - 20
- *   - once a tick touches buy target n, the 20-point SL is off and the stop becomes
- *     "5-min candle closes below target n" (moves up to every further target touched)
+ *   - the ONLY exit (besides the 15:14 square-off): Supertrend (10, 3) of the option's own 5-min chart
+ *     turns to sell, read on the candle close and filled at the next tick. No point stop, no target exit;
+ *     the targets are reference lines (the trade only records how many were touched).
+ *   - Supertrend is recursive (RMA of the true range, band carry-over), so it is warmed up on the same
+ *     strike's previous trading day and continues into today, like a chart does.
  *   - after an exit, a 5-min candle must close below buy above before a new entry
  *   - no daily profit / loss limit, everything closed at 15:14
  */
@@ -26,9 +28,9 @@ import { runDays, summarize, inr } from "./backtestRunner.js";
 
 const RANGE_PCT = 0.2611;      // range = previous-day (high - low) * 26.11%
 const TARGET_COUNT = 11;
-const SL_POINTS = 20;          // initial stop below entry (tick)
+const ST_PERIOD = 10;          // Supertrend ATR length
+const ST_FACTOR = 3;           // Supertrend band multiplier
 const CANDLE_MINUTES = 5;
-const FIRST_ENTRY_PCT = 0.1306; // first entry of a leg needs a close above buy above + 13.06% (sell side: below sell below - 13.06%)
 const STRIKE_STEP = 50;
 const SELECT_TIME = "09:15";   // NIFTY 1-min candle whose close picks the ATM (known at 09:16)
 const LOTS = 1;
@@ -38,6 +40,7 @@ const toMin = (hhmm) => {
   const [h, m] = hhmm.split(":").map(Number);
   return h * 60 + m;
 };
+const toHHMM = (min) => `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
 const bucketOf = (hhmm) => Math.floor((toMin(hhmm) - toMin("09:15")) / CANDLE_MINUTES);
 
 function calculateLevels(prevHigh, prevLow, open) {
@@ -51,11 +54,70 @@ function calculateLevels(prevHigh, prevLow, open) {
     range: round(range),
     buyAbove: round(buyAbove),
     buyTargets: Array.from({ length: TARGET_COUNT }, (_, i) => round(buyAbove + (i + 1) * range)),
-    firstBuyAbove: round(buyAbove + buyAbove * FIRST_ENTRY_PCT),
-    firstSellBelow: round(sellBelow - sellBelow * FIRST_ENTRY_PCT),
     sellBelow: round(sellBelow),
     sellTargets: Array.from({ length: TARGET_COUNT }, (_, i) => round(sellBelow - (i + 1) * range)),
   };
+}
+
+// =========================
+// SUPERTREND (same as TradingView ta.supertrend(3, 10))
+// =========================
+
+const newSt = () => ({ n: 0, trs: [], atr: null, prevClose: null, upper: null, lower: null, dir: null, value: null });
+
+/**
+ * Feed one completed candle. dir: -1 = uptrend (buy), +1 = downtrend (sell), null until the ATR exists.
+ * Returns { dir, prevDir, value } after this candle.
+ */
+function stStep(st, c) {
+  const prevDir = st.dir;
+  const tr = st.prevClose === null ? c.high - c.low : Math.max(c.high - c.low, Math.abs(c.high - st.prevClose), Math.abs(c.low - st.prevClose));
+  st.n += 1;
+  if (st.n <= ST_PERIOD) {
+    st.trs.push(tr);
+    st.atr = st.n === ST_PERIOD ? st.trs.reduce((a, b) => a + b, 0) / ST_PERIOD : null; // RMA starts from the SMA of the first 10
+  } else {
+    st.atr = (st.atr * (ST_PERIOD - 1) + tr) / ST_PERIOD;
+  }
+  if (st.atr === null) {
+    st.prevClose = c.close;
+    return { dir: null, prevDir: null, value: null };
+  }
+  const src = (c.high + c.low) / 2;
+  let upper = src + ST_FACTOR * st.atr;
+  let lower = src - ST_FACTOR * st.atr;
+  if (st.lower !== null) {
+    lower = lower > st.lower || st.prevClose < st.lower ? lower : st.lower;
+    upper = upper < st.upper || st.prevClose > st.upper ? upper : st.upper;
+  }
+  let dir;
+  if (st.dir === null) dir = 1;
+  else if (st.dir === 1) dir = c.close > upper ? -1 : 1;
+  else dir = c.close < lower ? 1 : -1;
+  st.upper = upper;
+  st.lower = lower;
+  st.dir = dir;
+  st.value = dir === -1 ? lower : upper;
+  st.prevClose = c.close;
+  return { dir, prevDir, value: st.value };
+}
+
+/** 5-min candles of one day's 1-min bars (09:15-15:29), aligned to 09:15 */
+function dayCandles(bars) {
+  const out = [];
+  for (const hhmm of minutesBetween("09:15", "15:29")) {
+    const b = bars[hhmm];
+    if (!b) continue;
+    const k = bucketOf(hhmm);
+    const c = out[out.length - 1];
+    if (!c || c.k !== k) out.push({ k, open: b[0], high: b[1], low: b[2], close: b[3] });
+    else {
+      c.high = Math.max(c.high, b[1]);
+      c.low = Math.min(c.low, b[2]);
+      c.close = b[3];
+    }
+  }
+  return out;
 }
 
 // =========================
@@ -85,7 +147,7 @@ class LevelBreakoutDaySim {
       pnl: 0, ltp: 0, lot: LOTS,
       position: false, entryPrice: null, entryTime: null, entryReason: null,
       targetIdx: -1,          // highest buy target touched in the open trade (-1 = none)
-      firstDone: false,       // the first entry uses the 13.06% line, later ones the plain buy above
+      st: newSt(), stRows: [], entrySt: null,   // Supertrend state, its candle rows (report), state at the entry
       armed: true,            // a new entry is allowed (needs a 5-min close below buy above after an exit)
       candle: null, bucket: null,
       tradingDisabled: false,
@@ -101,6 +163,12 @@ class LevelBreakoutDaySim {
       atmStrike: this.atm,
       niftyAtSelect: this.spotAtSelect,
       levels: { CE: this.legs.CE.levels, PE: this.legs.PE.levels },
+      supertrend: {
+        params: { period: ST_PERIOD, factor: ST_FACTOR },
+        warmup: { CE: this.legs.CE.stWarm, PE: this.legs.PE.stWarm },
+        CE: this.legs.CE.stRows,
+        PE: this.legs.PE.stRows,
+      },
     };
   }
 
@@ -133,14 +201,28 @@ class LevelBreakoutDaySim {
 
       leg.strike = this.atm;
       leg.strikesUsed.push(this.atm);
+      this.warmSupertrend(leg, prevBars);
       leg.levels = calculateLevels(Math.max(...pb.map((b) => b[1])), Math.min(...pb.map((b) => b[2])), open);
       const L = leg.levels;
       this.log("SELECT", `${side} ${this.atm} | prev H ${L.prevHigh} L ${L.prevLow} | open ${L.open} | range ${L.range} | ` +
-        `buy above ${L.buyAbove} (first entry above ${L.firstBuyAbove}) | T1 ${L.buyTargets[0]} … T11 ${L.buyTargets[TARGET_COUNT - 1]}`, {
+        `buy above ${L.buyAbove} | T1 ${L.buyTargets[0]} … T11 ${L.buyTargets[TARGET_COUNT - 1]}`, {
         side, strike: this.atm, levels: L,
       });
     }
     return null;
+  }
+
+  // ---------- Supertrend warm-up ----------
+
+  /** run the previous day's 5-min candles of the same strike through the indicator, so today starts like a chart does */
+  warmSupertrend(leg, prevBars) {
+    const candles = prevBars ? dayCandles(prevBars) : [];
+    for (const c of candles) stStep(leg.st, c);
+    leg.stWarm = { candles: candles.length, ready: leg.st.atr !== null };
+    if (candles.length < 2 * ST_PERIOD) {
+      this.now = "09:15";
+      this.log("WARN", `${leg.name} ${leg.strike}: only ${candles.length} previous-day 5-min candles for the Supertrend, its first values of the day can differ from a chart`, { side: leg.name });
+    }
   }
 
   // ---------- orders ----------
@@ -151,10 +233,9 @@ class LevelBreakoutDaySim {
     leg.entryTime = this.now;
     leg.targetIdx = -1;
     leg.armed = false;
-    const line = leg.firstDone ? leg.levels.buyAbove : leg.levels.firstBuyAbove;
-    leg.entryReason = `${CANDLE_MINUTES}-min close ${candleClose} > ${leg.firstDone ? "buy above" : "first-entry line"} ${line}`;
-    leg.firstDone = true;
-    this.log("ENTRY", `BUY ${leg.name} ${leg.strike} @ ${price.toFixed(2)} | ${leg.entryReason} | SL ${round(price - SL_POINTS)}`, {
+    leg.entryReason = `${CANDLE_MINUTES}-min close ${candleClose} > buy above ${leg.levels.buyAbove}`;
+    leg.entrySt = leg.st.dir === null ? null : { trend: leg.st.dir === -1 ? "buy" : "sell", value: round(leg.st.value) };
+    this.log("ENTRY", `BUY ${leg.name} ${leg.strike} @ ${price.toFixed(2)} | ${leg.entryReason} | Supertrend is ${leg.entrySt ? leg.entrySt.trend + " " + leg.entrySt.value : "not ready"}`, {
       side: leg.name, strike: leg.strike, price: round(price),
     });
   }
@@ -174,9 +255,9 @@ class LevelBreakoutDaySim {
       exitPrice: round(price),
       pivot: `BUY_ABOVE ${L.buyAbove}`,
       buyAbove: L.buyAbove,
-      initialSl: round(leg.entryPrice - SL_POINTS),
+      supertrendAtEntry: leg.entrySt,
+      supertrendAtExit: leg.st.dir === null ? null : { trend: leg.st.dir === -1 ? "buy" : "sell", value: round(leg.st.value) },
       targetsHit: leg.targetIdx + 1,
-      trailStop: leg.targetIdx >= 0 ? L.buyTargets[leg.targetIdx] : null,
       entryReason: leg.entryReason,
       exitReason: reason,
       exitType: kind,
@@ -190,6 +271,7 @@ class LevelBreakoutDaySim {
     leg.position = false;
     leg.entryPrice = null;
     leg.entryTime = null;
+    leg.entrySt = null;
     leg.targetIdx = -1;
   }
 
@@ -209,35 +291,39 @@ class LevelBreakoutDaySim {
     const c = candle.close;
     const L = leg.levels;
 
+    // Supertrend first: the candle that just completed
+    const ref = stStep(leg.st, candle);
+    leg.stRows.push({
+      time: candle.start, end: toHHMM(toMin(candle.start) + CANDLE_MINUTES),
+      open: round(candle.open), high: round(candle.high), low: round(candle.low), close: round(candle.close),
+      supertrend: ref.value === null ? null : round(ref.value, 3), trend: ref.dir === null ? null : ref.dir === -1 ? "buy" : "sell",
+      flip: ref.prevDir !== null && ref.dir !== ref.prevDir ? (ref.dir === 1 ? "to sell" : "to buy") : null,
+    });
+
     if (leg.position) {
-      if (leg.targetIdx >= 0 && c < L.buyTargets[leg.targetIdx]) {
-        this.exit(leg, ltp, `5-min close ${c} < T${leg.targetIdx + 1} ${L.buyTargets[leg.targetIdx]}`, "TRAIL");
+      // the only exit: the Supertrend turns from buy to sell on this candle's close
+      if (ref.prevDir === -1 && ref.dir === 1) {
+        this.exit(leg, ltp, `Supertrend (${ST_PERIOD}, ${ST_FACTOR}) turned sell: ${CANDLE_MINUTES}-min close ${round(c)} < band ${round(ref.value)}`, "SUPERTREND");
       }
       return;
     }
 
     if (!leg.armed && c < L.buyAbove) {
       leg.armed = true;
-      this.log("REARM", `${leg.name} 5-min close ${c} < buy above ${L.buyAbove} -> re-armed`, { side: leg.name });
+      this.log("REARM", `${leg.name} ${CANDLE_MINUTES}-min close ${c} < buy above ${L.buyAbove} -> re-armed`, { side: leg.name });
       return;
     }
 
-    if (leg.armed && c > (leg.firstDone ? L.buyAbove : L.firstBuyAbove) && this.now < TRADE_END) this.enter(leg, ltp, c);
+    if (leg.armed && c > L.buyAbove && this.now < TRADE_END) this.enter(leg, ltp, c);
   }
 
   onTicks(leg, ltp) {
     if (!leg.position) return;
     const L = leg.levels;
-    // target touches: the stop moves up to the highest target touched
+    // target touches are only recorded (they no longer move any stop)
     while (leg.targetIdx + 1 < TARGET_COUNT && ltp >= L.buyTargets[leg.targetIdx + 1] - 1e-9) {
       leg.targetIdx += 1;
-      this.log("TARGET", `${leg.name} touched T${leg.targetIdx + 1} ${L.buyTargets[leg.targetIdx]} -> stop = 5-min close below it`, {
-        side: leg.name, target: leg.targetIdx + 1,
-      });
-    }
-    // initial 20-point SL only until T1 is touched
-    if (leg.targetIdx < 0 && ltp <= leg.entryPrice - SL_POINTS + 1e-9) {
-      this.exit(leg, ltp, `Tick ${ltp.toFixed(2)} <= entry ${round(leg.entryPrice)} - ${SL_POINTS}`, "SL");
+      this.log("TARGET", `${leg.name} touched T${leg.targetIdx + 1} ${L.buyTargets[leg.targetIdx]}`, { side: leg.name, target: leg.targetIdx + 1 });
     }
   }
 
@@ -256,7 +342,7 @@ class LevelBreakoutDaySim {
 
   levelCandidates(leg) {
     if (!leg.position) return [];
-    return [...leg.levels.buyTargets, leg.entryPrice - SL_POINTS];
+    return leg.levels.buyTargets;
   }
 
   walk(leg, a, b) {
@@ -327,10 +413,10 @@ class LevelBreakoutDaySim {
 export async function runNiftyOptionLevelBreakoutBacktest(input) {
   const run = await runDays(input, LevelBreakoutDaySim, "level breakout");
 
-  // trailing exits per leg / day
+  // Supertrend exits per leg / day
   for (const d of run.days.filter((x) => x.status === "ok")) {
     for (const side of ["CE", "PE"]) {
-      d[side.toLowerCase()].trails = d.trades.filter((t) => t.side === side && t.exitType === "TRAIL").length;
+      d[side.toLowerCase()].trails = d.trades.filter((t) => t.side === side && t.exitType === "SUPERTREND").length;
     }
     d.trails = d.ce.trails + d.pe.trails;
   }
@@ -353,11 +439,15 @@ export async function runNiftyOptionLevelBreakoutBacktest(input) {
 
     analysis = [...head];
     if (trades.length) {
-      const sl = trades.filter((t) => t.exitType === "SL").length;
+      const st = trades.filter((t) => t.exitType === "SUPERTREND");
+      const fo = trades.filter((t) => t.exitType === "FORCE");
+      const net = (a) => inr(a.reduce((x, t) => x + t.pnl, 0));
       const reached = trades.filter((t) => t.targetsHit > 0).length;
       const best = Math.max(...trades.map((t) => t.targetsHit));
-      analysis.push(`${trades.length} trades: ${sl} stopped at entry − ${SL_POINTS} before T1, ${reached} reached at least T1 ` +
-        `(best run: T${best}). Avg win ${inr(summary.avgWin)} vs avg loss ${inr(summary.avgLoss)}.`);
+      analysis.push(`${trades.length} trades: ${st.length} closed when the Supertrend (${ST_PERIOD}, ${ST_FACTOR}) turned sell (net ${net(st)}), ` +
+        `${fo.length} squared off at 15:14 (net ${net(fo)}). ${reached} reached at least T1 (best run: T${best}). Avg win ${inr(summary.avgWin)} vs avg loss ${inr(summary.avgLoss)}.`);
+      const sell = trades.filter((t) => t.supertrendAtEntry?.trend === "sell").length;
+      if (sell) analysis.push(`${sell} trade(s) were entered while the Supertrend was already in sell, so they only exit after it turns buy and then sell again, or at 15:14.`);
     }
     analysis.push(...tail.filter((x) => !x.startsWith("Best pivot")));
   }
@@ -374,8 +464,7 @@ export async function runNiftyOptionLevelBreakoutBacktest(input) {
       rangePct: RANGE_PCT * 100,
       targets: TARGET_COUNT,
       candleMinutes: CANDLE_MINUTES,
-      initialSlPoints: SL_POINTS,
-      trailing: "after a tick touches buy target n: exit on a 5-min close below target n",
+      exit: `Supertrend (${ST_PERIOD}, ${ST_FACTOR}) on the option's ${CANDLE_MINUTES}-min chart turning sell (read on the candle close), warmed up on the previous trading day; no point stop, no target exit`,
       rearm: "5-min close below buy above after an exit",
       tradeEnd: TRADE_END,
     },

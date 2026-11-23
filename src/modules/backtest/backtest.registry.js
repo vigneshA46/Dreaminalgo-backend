@@ -42,7 +42,7 @@ export const BACKTEST_STRATEGIES = {
     title: "nifty_option_level_breakout",
     description:
       "NIFTY ATM CE + PE. range = prev-day (H − L) × 26.11%, buy above = open + range, targets up to T11. " +
-      "3-min close above buy above → 1 lot, SL entry − 20 until T1, then trail on 3-min close below the last target touched.",
+      "5-min close above buy above → 1 lot. The only exit is the Supertrend (10, 3) of the option's 5-min chart turning sell (square off 15:14).",
     run: runNiftyOptionLevelBreakoutBacktest,
   },
   nifty_hourly_range_touch: {
