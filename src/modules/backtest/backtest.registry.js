@@ -9,6 +9,7 @@ import { runNiftyOptionPivotBufferBacktest } from "./pivotBuffer.service.js";
 import { runNiftyOptionPivotFixedTargetBacktest } from "./pivotFixedTarget.service.js";
 import { runNiftyOptionLevelBreakoutBacktest } from "./levelBreakout.service.js";
 import { runNiftyBearishBreakoutOptionBuyingBacktest } from "./bearishBreakout.service.js";
+import { runNiftyHullMaOptionBuyingBacktest } from "./hullMa.service.js";
 import {
   runNiftyHourlyRangeTouchBacktest,
   runNiftyHourlyRangeTouch1mBacktest,
@@ -71,5 +72,12 @@ export const BACKTEST_STRATEGIES = {
       "NIFTY CE + PE, each side one strike priced at or just above 200 at 09:30. Latest bearish 15-min candle marks its high; a tick above high + 4 buys 1 lot, " +
       "SL = low of that 15-min candle, then trail on the low − 2 of each completed 5-min Heikin Ashi candle. A fresh bearish candle is needed after every exit. Square off 15:14.",
     run: runNiftyBearishBreakoutOptionBuyingBacktest,
+  },
+  nifty_hull_ma_option_buying: {
+    title: "nifty_hull_ma_option_buying",
+    description:
+      "NIFTY Hull MA (24) on 1 / 3 / 5 / 15-min candles. From 09:30 every colour change is a signal: green buys CE, red buys PE (ATM or ITM1–ITM5), the other side is closed. " +
+      "1 lot, optional day MTM target and day MTM SL, square off 15:14.",
+    run: runNiftyHullMaOptionBuyingBacktest,
   },
 };

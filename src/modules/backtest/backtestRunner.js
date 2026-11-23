@@ -49,6 +49,7 @@ export async function runDays(input, SimClass, label) {
     let today;
     let prev;
     let index = null;
+    let history = null;
     try {
       const calls0 = dh.calls;
       today = await dh.day(day, 1);
@@ -70,6 +71,18 @@ export async function runDays(input, SimClass, label) {
         prev = await dh.day(pday, prevCode);
       }
       if (SimClass.needsIndex) index = await dh.indexDay(day);
+      // indicator strategies: the NIFTY 1-min bars of the last N trading days before this one (oldest first),
+      // so an indicator can start fully warmed up at 09:15 like it is on a chart
+      if (SimClass.indexHistoryDays) {
+        history = [];
+        let d = day;
+        for (let i = 0; i < 14 && history.length < SimClass.indexHistoryDays; i++) {
+          d = addDays(d, -1);
+          if (isWeekend(d)) continue;
+          const bars = await dh.indexDay(d);
+          if (Object.keys(bars).length) history.unshift({ date: d, bars });
+        }
+      }
       if (dh.calls > calls0) log.info(`data ready (${dh.calls - calls0} API calls)`, day);
     } catch (e) {
       // token / subscription problems -> nothing else will work, stop the whole run
@@ -86,7 +99,7 @@ export async function runDays(input, SimClass, label) {
 
     let sim;
     try {
-      sim = new SimClass(day, today, prev, index);
+      sim = new SimClass(day, today, prev, index, { history, options: input.options });
       const err = sim.run();
       if (err) {
         days.push({ ...rec, status: "skipped", message: err });

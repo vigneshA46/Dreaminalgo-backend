@@ -4,6 +4,7 @@ import * as pivotFixedTargetService from "./pivotFixedTarget.service.js";
 import * as levelBreakoutService from "./levelBreakout.service.js";
 import * as hourlyRangeService from "./hourlyRange.service.js";
 import * as bearishBreakoutService from "./bearishBreakout.service.js";
+import * as hullMaService from "./hullMa.service.js";
 import { startJob, getJob, cancelJob } from "./backtestJobs.js";
 
 // same input checks, status codes and error shape for every backtest endpoint
@@ -62,6 +63,9 @@ export const niftyHourlyRangeTouchCustom = runBacktest(hourlyRangeService.runNif
 
 // POST /api/backtest/nifty_bearish_breakout_option_buying
 export const niftyBearishBreakoutOptionBuying = runBacktest(bearishBreakoutService.runNiftyBearishBreakoutOptionBuyingBacktest);
+
+// POST /api/backtest/nifty_hull_ma_option_buying   options: { timeframe, strike, dayTarget, daySl }
+export const niftyHullMaOptionBuying = runBacktest(hullMaService.runNiftyHullMaOptionBuyingBacktest);
 
 // ---------- background date-range runs (custom hourly strategy) ----------
 
