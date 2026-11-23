@@ -69,18 +69,18 @@ export const niftyHullMaOptionBuying = runBacktest(hullMaService.runNiftyHullMaO
 
 // ---------- background date-range runs (custom hourly strategy) ----------
 
-// POST /api/backtest/nifty_hourly_range_touch_custom/start   same body as the plain run -> { jobId }
-export const startHourlyCustomJob = (req, res) => {
+// strategies that can run a date range as a background job: runner + option check (400 before any job starts)
+const RANGE_JOBS = {
+  nifty_hourly_range_touch_custom: { run: hourlyRangeService.runNiftyHourlyRangeTouchCustomBacktest, validate: hourlyRangeService.validateCustomOptions },
+  nifty_hull_ma_option_buying: { run: hullMaService.runNiftyHullMaOptionBuyingBacktest, validate: hullMaService.validateHullOptions },
+};
+
+const startRangeJob = (key) => (req, res) => {
   try {
     const input = backtestService.validateBacktestInput(req.body);
-    hourlyRangeService.validateCustomOptions(input.options);
+    RANGE_JOBS[key].validate(input.options);
     // the Dhan client id is the owner: one running range job per account
-    const jobId = startJob({
-      owner: `dhan:${input.clientId}`,
-      key: "nifty_hourly_range_touch_custom",
-      input,
-      run: hourlyRangeService.runNiftyHourlyRangeTouchCustomBacktest,
-    });
+    const jobId = startJob({ owner: `dhan:${input.clientId}`, key, input, run: RANGE_JOBS[key].run });
     res.status(202).json({ success: true, jobId });
   } catch (err) {
     const status = err.status || 400;
@@ -91,6 +91,12 @@ export const startHourlyCustomJob = (req, res) => {
     });
   }
 };
+
+// POST /api/backtest/nifty_hourly_range_touch_custom/start   same body as the plain run -> { jobId }
+export const startHourlyCustomJob = startRangeJob("nifty_hourly_range_touch_custom");
+
+// POST /api/backtest/nifty_hull_ma_option_buying/start
+export const startHullMaJob = startRangeJob("nifty_hull_ma_option_buying");
 
 // GET /api/backtest/jobs/:id
 export const getBacktestJob = (req, res) => {

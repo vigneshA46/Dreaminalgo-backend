@@ -2,6 +2,7 @@ import * as service from "./backtestAccess.service.js";
 import { BACKTEST_STRATEGIES } from "../backtest/backtest.registry.js";
 import { BacktestError, validateBacktestInput } from "../backtest/backtest.service.js";
 import { validateCustomOptions } from "../backtest/hourlyRange.service.js";
+import { validateHullOptions } from "../backtest/hullMa.service.js";
 import { startJob, getJob, cancelJob } from "../backtest/backtestJobs.js";
 
 const fail = (res, err) => {
@@ -85,7 +86,12 @@ export const myStrategies = async (req, res) => {
 const running = new Set();
 
 // strategies where a user may pick a date range (everything else: one day), capped to protect the platform's Dhan quota
-const RANGE_KEYS = new Set(["nifty_hourly_range_touch_custom"]);
+// strategies a user may run over a date range (as a background job), with their option checks
+const RANGE_VALIDATORS = {
+  nifty_hourly_range_touch_custom: validateCustomOptions,
+  nifty_hull_ma_option_buying: validateHullOptions,
+};
+const RANGE_KEYS = new Set(Object.keys(RANGE_VALIDATORS));
 const MAX_USER_RANGE_DAYS = 31;
 
 // POST /api/backtest-access/my/run/:key   body: { date: "YYYY-MM-DD", options? (strategies with settings) }
@@ -177,7 +183,7 @@ export const startMyBacktestJob = async (req, res) => {
     }
     const creds = await service.getPlatformDhanCredentials();
     const input = validateBacktestInput({ ...creds, fromDate: date, toDate, includeEvents: false, options: req.body?.options });
-    validateCustomOptions(input.options);
+    RANGE_VALIDATORS[key](input.options);
     const jobId = startJob({ owner: `user:${userId}`, key, input, run: strategy.run });
     await service.logRunService({ userId, key, date, status: "ok", trades: 0 }).catch(() => {});
     res.status(202).json({ success: true, jobId });

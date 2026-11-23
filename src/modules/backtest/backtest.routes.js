@@ -1,5 +1,5 @@
 import express from "express";
-import { pivotOptionBuyingCum, niftyOptionPivotBuffer, niftyOptionPivotFixedTarget, niftyOptionLevelBreakout, niftyHourlyRangeTouch, niftyHourlyRangeTouch1m, niftyHourlyRangeTouchCustom, niftyBearishBreakoutOptionBuying, niftyHullMaOptionBuying, startHourlyCustomJob, getBacktestJob, cancelBacktestJob } from "./backtest.controller.js";
+import { pivotOptionBuyingCum, niftyOptionPivotBuffer, niftyOptionPivotFixedTarget, niftyOptionLevelBreakout, niftyHourlyRangeTouch, niftyHourlyRangeTouch1m, niftyHourlyRangeTouchCustom, niftyBearishBreakoutOptionBuying, niftyHullMaOptionBuying, startHourlyCustomJob, startHullMaJob, getBacktestJob, cancelBacktestJob } from "./backtest.controller.js";
 
 const router = express.Router();
 
@@ -16,6 +16,7 @@ router.post("/nifty_hull_ma_option_buying", niftyHullMaOptionBuying);
 
 // BACKGROUND RANGE RUN (custom hourly strategy): start -> poll -> (cancel)
 router.post("/nifty_hourly_range_touch_custom/start", startHourlyCustomJob);
+router.post("/nifty_hull_ma_option_buying/start", startHullMaJob);
 router.get("/jobs/:id", getBacktestJob);
 router.post("/jobs/:id/cancel", cancelBacktestJob);
 

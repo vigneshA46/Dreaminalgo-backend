@@ -359,58 +359,67 @@ export const validateHullOptions = (options) => {
 
 export async function runNiftyHullMaOptionBuyingBacktest(input) {
   const rules = hullRules(input.options);
-  const run = await runDays(input, HullDaySim, "hull ma");
 
-  for (const d of run.days.filter((x) => x.status === "ok")) {
-    d.flips = d.trades.filter((t) => t.exitType === "FLIP").length;
-    d.targets = d.trades.filter((t) => t.exitType === "DAY_TARGET").length;
-    d.stopLosses = d.trades.filter((t) => t.exitType === "DAY_SL").length;
-  }
-
-  const sum = summarize(run.days, LOTS);
-  let analysis = ["No traded days in this range."];
-  let summary = null;
-  if (sum) {
-    const { trades, head, tail } = sum;
-    summary = { ...sum.summary };
-    delete summary.byPivot;
-    analysis = [...head];
-    if (trades.length) {
-      const by = (k) => trades.filter((t) => t.exitType === k);
-      const net = (a) => inr(a.reduce((s, t) => s + t.pnl, 0));
-      const parts = [`${by("FLIP").length} closed by a colour change (net ${net(by("FLIP"))})`];
-      if (by("DAY_TARGET").length) parts.push(`${by("DAY_TARGET").length} by the day target (net ${net(by("DAY_TARGET"))})`);
-      if (by("DAY_SL").length) parts.push(`${by("DAY_SL").length} by the day SL (net ${net(by("DAY_SL"))})`);
-      parts.push(`${by("FORCE").length} squared off at ${TRADE_END} (net ${net(by("FORCE"))})`);
-      analysis.push(`${trades.length} trades: ${parts.join(", ")}. Avg win ${inr(summary.avgWin)} vs avg loss ${inr(summary.avgLoss)}.`);
-      const green = trades.filter((t) => t.signalColor === "green");
-      const red = trades.filter((t) => t.signalColor === "red");
-      analysis.push(`Green signals (CE): ${green.length} trades, net ${net(green)}. Red signals (PE): ${red.length} trades, net ${net(red)}.`);
+  // everything after the day loop; also used for the partial results of a background range run
+  const assemble = (run) => {
+    for (const d of run.days.filter((x) => x.status === "ok")) {
+      d.flips = d.trades.filter((t) => t.exitType === "FLIP").length;
+      d.targets = d.trades.filter((t) => t.exitType === "DAY_TARGET").length;
+      d.stopLosses = d.trades.filter((t) => t.exitType === "DAY_SL").length;
+      if (input.slim) delete d.hmaCandles; // range runs: the day dropdowns do not show candles
     }
-    analysis.push(...tail.filter((x) => !x.startsWith("Best pivot")));
-  }
 
-  return {
-    success: run.success,
-    strategy: "nifty_hull_ma_option_buying",
-    params: {
-      fromDate: input.fromDate,
-      toDate: input.toDate,
-      lotSize: LOTSIZE,
-      lots: LOTS,
-      indicator: `Hull MA ${HMA_PERIOD} (wma ${Math.round(HMA_PERIOD / 2)}, ${HMA_PERIOD}, ${Math.round(Math.sqrt(HMA_PERIOD))}) on NIFTY ${rules.timeframe}-min candles, previous days loaded so it is warmed up`,
-      candleMinutes: rules.timeframe,
-      strike: `${strikeLabel(rules.strikeOffset)} from the signal candle close (ATM = nearest ${STRIKE_STEP}), nearest weekly expiry`,
-      signal: `from ${SIGNAL_START}: a candle close with a new colour — green buys CE, red buys PE, the other side is closed`,
-      dayTarget: rules.dayTarget,
-      dayMaxLoss: rules.dayMaxLoss,
-      tradeEnd: TRADE_END,
-    },
-    summary,
-    analysis,
-    days: run.days,
-    errors: run.errors,
-    logs: run.logs,
-    meta: run.meta,
+    const sum = summarize(run.days, LOTS);
+    let analysis = ["No traded days in this range."];
+    let summary = null;
+    if (sum) {
+      const { trades, head, tail } = sum;
+      summary = { ...sum.summary };
+      delete summary.byPivot;
+      analysis = [...head];
+      if (trades.length) {
+        const by = (k) => trades.filter((t) => t.exitType === k);
+        const net = (a) => inr(a.reduce((s, t) => s + t.pnl, 0));
+        const parts = [`${by("FLIP").length} closed by a colour change (net ${net(by("FLIP"))})`];
+        if (by("DAY_TARGET").length) parts.push(`${by("DAY_TARGET").length} by the day target (net ${net(by("DAY_TARGET"))})`);
+        if (by("DAY_SL").length) parts.push(`${by("DAY_SL").length} by the day SL (net ${net(by("DAY_SL"))})`);
+        parts.push(`${by("FORCE").length} squared off at ${TRADE_END} (net ${net(by("FORCE"))})`);
+        analysis.push(`${trades.length} trades: ${parts.join(", ")}. Avg win ${inr(summary.avgWin)} vs avg loss ${inr(summary.avgLoss)}.`);
+        const green = trades.filter((t) => t.signalColor === "green");
+        const red = trades.filter((t) => t.signalColor === "red");
+        analysis.push(`Green signals (CE): ${green.length} trades, net ${net(green)}. Red signals (PE): ${red.length} trades, net ${net(red)}.`);
+      }
+      analysis.push(...tail.filter((x) => !x.startsWith("Best pivot")));
+    }
+
+    return {
+      success: run.success,
+      strategy: "nifty_hull_ma_option_buying",
+      params: {
+        fromDate: input.fromDate,
+        toDate: input.toDate,
+        lotSize: LOTSIZE,
+        lots: LOTS,
+        indicator: `Hull MA ${HMA_PERIOD} (wma ${Math.round(HMA_PERIOD / 2)}, ${HMA_PERIOD}, ${Math.round(Math.sqrt(HMA_PERIOD))}) on NIFTY ${rules.timeframe}-min candles, previous days loaded so it is warmed up`,
+        candleMinutes: rules.timeframe,
+        strike: `${strikeLabel(rules.strikeOffset)} from the signal candle close (ATM = nearest ${STRIKE_STEP}), nearest weekly expiry`,
+        signal: `from ${SIGNAL_START}: a candle close with a new colour — green buys CE, red buys PE, the other side is closed`,
+        dayTarget: rules.dayTarget,
+        dayMaxLoss: rules.dayMaxLoss,
+        tradeEnd: TRADE_END,
+      },
+      summary,
+      analysis,
+      days: run.days,
+      errors: run.errors,
+      logs: run.logs,
+      meta: run.meta,
+    };
   };
+
+  const run = await runDays(input, HullDaySim, "hull ma", { assemble });
+  const out = assemble(run);
+  if (run.cancelled) out.cancelled = true;
+  if (input.onUpdate) input.onUpdate({ result: out, progress: { done: run.doneDays, total: run.totalDays, date: null } });
+  return out;
 }

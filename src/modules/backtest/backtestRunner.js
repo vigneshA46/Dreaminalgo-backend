@@ -31,7 +31,7 @@ function legReport(leg) {
   };
 }
 
-export async function runDays(input, SimClass, label) {
+export async function runDays(input, SimClass, label, hooks = {}) {
   const started = Date.now();
   const log = new RunLog();
   const dh = new DhanData({ clientId: input.clientId, accessToken: input.accessToken, log });
@@ -42,8 +42,36 @@ export async function runDays(input, SimClass, label) {
   const errors = [];
   let cumulative = 0;
 
+  const snapshot = () => {
+    const tradingDays = days.filter((d) => d.status !== "holiday");
+    return {
+      success: !(tradingDays.length > 0 && tradingDays.every((d) => d.status === "error")),
+      days,
+      errors,
+      logs: log.entries,
+      meta: {
+        apiCalls: dh.calls,
+        durationSec: round((Date.now() - started) / 1000, 1),
+        dataSource: "Dhan /v2/charts/rollingoption (expired options, 1-min, ATM±10)",
+      },
+    };
+  };
+
+  // background jobs: progress / partial results after every day, and a way to stop early
+  let totalDays = 0;
+  for (let d = input.fromDate; d <= input.toDate; d = addDays(d, 1)) if (!isWeekend(d)) totalDays += 1;
+  let doneDays = 0;
+  let cancelled = false;
+
   for (let day = input.fromDate; day <= input.toDate; day = addDays(day, 1)) {
     if (isWeekend(day)) continue;
+    if (input.onUpdate && hooks.assemble) input.onUpdate({ result: hooks.assemble(snapshot()), progress: { done: doneDays, total: totalDays, date: day } });
+    if (input.isCancelled?.()) {
+      cancelled = true;
+      log.warn("stopped by the user");
+      break;
+    }
+    doneDays += 1;
     const rec = { date: day, day: dowName(day) };
 
     let today;
@@ -145,18 +173,7 @@ export async function runDays(input, SimClass, label) {
     log.info(`CE ${ce.pnl} | PE ${pe.pnl} | day ${dayPnl} | trades ${sim.trades.length}`, day);
   }
 
-  const tradingDays = days.filter((d) => d.status !== "holiday");
-  return {
-    success: !(tradingDays.length > 0 && tradingDays.every((d) => d.status === "error")),
-    days,
-    errors,
-    logs: log.entries,
-    meta: {
-      apiCalls: dh.calls,
-      durationSec: round((Date.now() - started) / 1000, 1),
-      dataSource: "Dhan /v2/charts/rollingoption (expired options, 1-min, ATM±10)",
-    },
-  };
+  return { ...snapshot(), cancelled, doneDays, totalDays };
 }
 
 export const inr = (x) => `${x < 0 ? "-" : ""}₹${Math.abs(Math.round(x)).toLocaleString("en-IN")}`;
