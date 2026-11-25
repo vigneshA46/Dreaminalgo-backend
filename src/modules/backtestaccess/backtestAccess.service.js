@@ -65,7 +65,8 @@ export const updateStrategyService = async (key, { title, description, is_active
 export const listStrategyUsersService = async (key) => {
   await ensureSeeded();
   const { rows } = await pool.query(
-    `SELECT u.id, u.fullname, u.email, u.mobile_number, a.created_at AS granted_at
+    `SELECT u.id, u.fullname, u.email, u.mobile_number, a.created_at AS granted_at,
+            a.can_run, a.can_read, a.can_write
      FROM backtest_strategy_access a
      JOIN users u ON u.id = a.user_id
      WHERE a.strategy_key = $1
@@ -75,18 +76,49 @@ export const listStrategyUsersService = async (key) => {
   return rows;
 };
 
-export const grantAccessService = async (key, userIds, adminId) => {
+const asFlag = (v, dflt) => (typeof v === "boolean" ? v : dflt);
+
+/** perms: { can_run?, can_read?, can_write? } — a plain grant means "may run" like before */
+const cleanPerms = (perms) => {
+  const p = perms && typeof perms === "object" ? perms : {};
+  const out = { can_run: asFlag(p.can_run, true), can_read: asFlag(p.can_read, false), can_write: asFlag(p.can_write, false) };
+  if (!out.can_run && !out.can_read && !out.can_write) throw new BacktestError("Pick at least one of run / read / write (or remove the user)", 400);
+  return out;
+};
+
+export const grantAccessService = async (key, userIds, adminId, perms) => {
   await ensureSeeded();
   if (!BACKTEST_STRATEGIES[key]) throw new BacktestError("Backtest strategy not found", 404);
   if (!Array.isArray(userIds) || !userIds.length) throw new BacktestError("userIds is required", 400);
+  const f = cleanPerms(perms);
 
   const { rowCount } = await pool.query(
-    `INSERT INTO backtest_strategy_access (strategy_key, user_id, granted_by)
-     SELECT $1, u.id, $3 FROM users u WHERE u.id = ANY($2::uuid[])
+    `INSERT INTO backtest_strategy_access (strategy_key, user_id, granted_by, can_run, can_read, can_write)
+     SELECT $1, u.id, $3, $4, $5, $6 FROM users u WHERE u.id = ANY($2::uuid[])
      ON CONFLICT (strategy_key, user_id) DO NOTHING`,
-    [key, userIds, adminId || null]
+    [key, userIds, adminId || null, f.can_run, f.can_read, f.can_write]
   );
   return { message: "Access granted", added: rowCount };
+};
+
+/** change run / read / write of a user who already has access */
+export const updatePermissionsService = async (key, userId, perms) => {
+  const p = perms && typeof perms === "object" ? perms : {};
+  const { rows } = await pool.query(
+    `SELECT can_run, can_read, can_write FROM backtest_strategy_access WHERE strategy_key = $1 AND user_id = $2`,
+    [key, userId]
+  );
+  if (!rows.length) throw new BacktestError("This user does not have access", 404);
+  const f = cleanPerms({
+    can_run: asFlag(p.can_run, rows[0].can_run),
+    can_read: asFlag(p.can_read, rows[0].can_read),
+    can_write: asFlag(p.can_write, rows[0].can_write),
+  });
+  await pool.query(
+    `UPDATE backtest_strategy_access SET can_run = $3, can_read = $4, can_write = $5 WHERE strategy_key = $1 AND user_id = $2`,
+    [key, userId, f.can_run, f.can_read, f.can_write]
+  );
+  return { message: "Permissions updated", ...f };
 };
 
 export const revokeAccessService = async (key, userId) => {
@@ -119,26 +151,29 @@ export const searchUsersService = async (q) => {
 export const myStrategiesService = async (userId) => {
   await ensureSeeded();
   const { rows } = await pool.query(
-    `SELECT s.key, s.title, s.description
+    `SELECT s.key, s.title, s.description, a.can_run, a.can_read, a.can_write
      FROM backtest_strategy_access a
      JOIN backtest_strategies s ON s.key = a.strategy_key
-     WHERE a.user_id = $1 AND s.is_active = true
+     WHERE a.user_id = $1 AND s.is_active = true AND (a.can_run OR a.can_read OR a.can_write)
      ORDER BY s.created_at, s.key`,
     [userId]
   );
   return rows.filter((r) => BACKTEST_STRATEGIES[r.key]);
 };
 
-export const hasAccess = async (userId, key) => {
+/** the user's rights on one (active) strategy: { can_run, can_read, can_write } or null */
+export const getAccess = async (userId, key) => {
   const { rows } = await pool.query(
-    `SELECT 1
+    `SELECT a.can_run, a.can_read, a.can_write
      FROM backtest_strategy_access a
      JOIN backtest_strategies s ON s.key = a.strategy_key
      WHERE a.user_id = $1 AND a.strategy_key = $2 AND s.is_active = true`,
     [userId, key]
   );
-  return rows.length > 0;
+  return rows[0] || null;
 };
+
+export const hasAccess = async (userId, key) => !!(await getAccess(userId, key))?.can_run;
 
 /**
  * The platform's Dhan login, kept fresh by the trading engine (dhan_token.py) in

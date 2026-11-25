@@ -6,7 +6,8 @@ import { validateHullOptions } from "../backtest/hullMa.service.js";
 import { validateEmaOptions } from "../backtest/emaRetest.service.js";
 import { validateEmaStOptions } from "../backtest/emaSupertrend.service.js";
 import { validateEmaStRejectionOptions } from "../backtest/emaSupertrendRejection.service.js";
-import { startJob, getJob, cancelJob } from "../backtest/backtestJobs.js";
+import { startJob, getJob, cancelJob, stashResult, getSaveSource } from "../backtest/backtestJobs.js";
+import { saveRun, readSaved } from "./backtestSaved.service.js";
 
 const fail = (res, err) => {
   const status = err instanceof BacktestError ? err.status : 500;
@@ -45,10 +46,19 @@ export const listStrategyUsers = async (req, res) => {
   }
 };
 
-// POST /api/backtest-access/strategies/:key/users   body: { userIds: [] }
+// POST /api/backtest-access/strategies/:key/users   body: { userIds: [], can_run?, can_read?, can_write? }
 export const grantAccess = async (req, res) => {
   try {
-    res.status(200).json(await service.grantAccessService(req.params.key, req.body?.userIds, req.user?.id));
+    res.status(200).json(await service.grantAccessService(req.params.key, req.body?.userIds, req.user?.id, req.body));
+  } catch (err) {
+    fail(res, err);
+  }
+};
+
+// PATCH /api/backtest-access/strategies/:key/users/:userId   body: { can_run?, can_read?, can_write? }
+export const updatePermissions = async (req, res) => {
+  try {
+    res.status(200).json(await service.updatePermissionsService(req.params.key, req.params.userId, req.body));
   } catch (err) {
     fail(res, err);
   }
@@ -118,7 +128,8 @@ export const runMyBacktest = async (req, res) => {
   running.add(userId);
   const started = Date.now();
   try {
-    if (!(await service.hasAccess(userId, key))) {
+    const access = await service.getAccess(userId, key);
+    if (!access?.can_run) {
       return res.status(403).json({ success: false, message: "You don't have access to this backtest" });
     }
 
@@ -135,8 +146,10 @@ export const runMyBacktest = async (req, res) => {
       durationSec: result.meta?.durationSec,
     });
 
+    // writers can save what they just ran: the server keeps its own copy and hands out a token
+    const saveToken = result.success && access.can_write ? stashResult({ owner: `user:${userId}`, key, result }) : undefined;
     res.status(result.success ? 200 : 502).json(
-      result.success ? result : { ...result, message: "Backtest failed for this day — see errors / logs" }
+      result.success ? { ...result, ...(saveToken ? { saveToken } : {}) } : { ...result, message: "Backtest failed for this day — see errors / logs" }
     );
   } catch (err) {
     let status = err instanceof BacktestError ? err.status : 500;
@@ -223,4 +236,50 @@ export const getMyBacktestJob = (req, res) => {
 export const cancelMyBacktestJob = (req, res) => {
   if (!cancelJob(req.params.id, `user:${req.user.id}`)) return res.status(404).json({ success: false, message: "Backtest not found" });
   res.status(200).json({ success: true });
+};
+
+/* ===========================
+   USER — saved backtests (write = save what was run, read = look at previous ones)
+=========================== */
+
+// POST /api/backtest-access/my/save/:key   body: { token, replace? }
+//   token = the job id of a finished range run, or the saveToken of a single-day run
+//   no "replace": days that are already saved are NOT touched, the answer lists them; replace true / false decides
+export const saveMyBacktest = async (req, res) => {
+  const { key } = req.params;
+  const userId = req.user.id;
+  const { token, replace } = req.body || {};
+  if (!BACKTEST_STRATEGIES[key]) return res.status(404).json({ success: false, message: "Backtest strategy not found" });
+  if (typeof token !== "string" || !token) return res.status(400).json({ success: false, message: "token is required" });
+  if (replace !== undefined && typeof replace !== "boolean") return res.status(400).json({ success: false, message: "replace must be true or false" });
+
+  try {
+    const access = await service.getAccess(userId, key);
+    if (!access?.can_write) return res.status(403).json({ success: false, message: "You don't have permission to save this backtest" });
+
+    const source = getSaveSource(token, `user:${userId}`);
+    if (!source || source.key !== key) {
+      return res.status(404).json({ success: false, message: "This run is no longer available to save (it expired or the server restarted) — run it again" });
+    }
+    const out = await saveRun({ userId, key, result: source.result, replace });
+    res.status(200).json({ success: true, ...out });
+  } catch (err) {
+    const status = err instanceof BacktestError ? err.status : 500;
+    if (status >= 500) console.error("[backtest-access] save failed:", err);
+    res.status(status).json({ success: false, message: status >= 500 ? "Could not save the backtest" : err.message });
+  }
+};
+
+// GET /api/backtest-access/my/saved/:key?from=YYYY-MM-DD&to=YYYY-MM-DD
+export const getMySavedBacktests = async (req, res) => {
+  const { key } = req.params;
+  if (!BACKTEST_STRATEGIES[key]) return res.status(404).json({ success: false, message: "Backtest strategy not found" });
+  try {
+    const access = await service.getAccess(req.user.id, key);
+    if (!access?.can_read) return res.status(403).json({ success: false, message: "You don't have permission to view saved backtests" });
+    res.status(200).json(await readSaved({ key, from: req.query.from, to: req.query.to }));
+  } catch (err) {
+    console.error("[backtest-access] read saved failed:", err);
+    res.status(500).json({ success: false, message: "Could not load the saved backtests" });
+  }
 };

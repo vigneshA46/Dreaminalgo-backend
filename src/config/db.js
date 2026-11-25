@@ -736,6 +736,62 @@ UNIQUE (user_id, strategy_id, broker_account_id, type);
       );
     `);
 
+    /* BACKTEST: per user + strategy rights. A row = may run; can_read / can_write are independent extras */
+    await pool.query(`
+      ALTER TABLE backtest_strategy_access
+        ADD COLUMN IF NOT EXISTS can_run BOOLEAN NOT NULL DEFAULT true,
+        ADD COLUMN IF NOT EXISTS can_read BOOLEAN NOT NULL DEFAULT false,
+        ADD COLUMN IF NOT EXISTS can_write BOOLEAN NOT NULL DEFAULT false;
+    `);
+
+    /* BACKTEST: saved results. One version per strategy + day (a new save replaces the old one).
+       Same idea as trade_legs / paper_trades. Times are IST wall-clock. */
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS backtest_trade_legs (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        strategy_key VARCHAR(100) NOT NULL REFERENCES backtest_strategies(key) ON DELETE CASCADE,
+        trade_date DATE NOT NULL,
+        leg VARCHAR(2) NOT NULL CHECK (leg IN ('CE','PE')),
+        strikes JSONB NOT NULL DEFAULT '[]',
+        trades INTEGER NOT NULL DEFAULT 0,
+        wins INTEGER NOT NULL DEFAULT 0,
+        pnl NUMERIC NOT NULL DEFAULT 0,
+        leg_data JSONB,
+        day_meta JSONB,
+        settings JSONB,
+        run_id UUID,
+        saved_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (strategy_key, trade_date, leg)
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS backtest_trades (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        strategy_key VARCHAR(100) NOT NULL REFERENCES backtest_strategies(key) ON DELETE CASCADE,
+        trade_date DATE NOT NULL,
+        run_id UUID,
+        trade_id UUID,
+        timestamp TIMESTAMP,
+        event_type VARCHAR(20),
+        leg_name VARCHAR(10),
+        symbol VARCHAR(60),
+        side VARCHAR(10),
+        lots INTEGER,
+        quantity INTEGER,
+        price NUMERIC,
+        reason TEXT,
+        pnl NUMERIC,
+        cum_pnl NUMERIC,
+        details JSONB,
+        saved_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_backtest_trades_day ON backtest_trades (strategy_key, trade_date);`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_backtest_trades_trade ON backtest_trades (trade_id);`);
+
     console.log("✅ Database connected & tables verified");
   } catch (error) {
     console.error("❌ Database initialization failed", error);

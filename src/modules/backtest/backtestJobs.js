@@ -98,3 +98,33 @@ export function cancelJob(id, owner) {
   if (j.status === "running") j.cancel = true;
   return true;
 }
+
+/* ===========================
+   Results that may be saved (the server only ever saves its OWN run results)
+=========================== */
+
+const stash = new Map(); // token -> { owner, key, result, at }
+
+/** remember a finished single-day result for 2 h so the page can ask to save it */
+export function stashResult({ owner, key, result }) {
+  const token = randomUUID();
+  stash.set(token, { owner, key, result, at: Date.now() });
+  return token;
+}
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [t, v] of stash) if (now - v.at > KEEP_MS) stash.delete(t);
+}, 10 * 60 * 1000).unref();
+
+/** a finished range job (its id) or a stashed single-day run (its token), owner-checked; null if unknown / still running */
+export function getSaveSource(token, owner) {
+  const j = jobs.get(token);
+  if (j) {
+    if (j.owner !== owner || j.status === "running" || !j.result) return null;
+    return { key: j.key, result: j.result };
+  }
+  const s = stash.get(token);
+  if (!s || s.owner !== owner) return null;
+  return { key: s.key, result: s.result };
+}
