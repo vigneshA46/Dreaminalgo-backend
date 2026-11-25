@@ -5,6 +5,9 @@ import * as levelBreakoutService from "./levelBreakout.service.js";
 import * as hourlyRangeService from "./hourlyRange.service.js";
 import * as bearishBreakoutService from "./bearishBreakout.service.js";
 import * as hullMaService from "./hullMa.service.js";
+import * as emaRetestService from "./emaRetest.service.js";
+import * as emaSupertrendService from "./emaSupertrend.service.js";
+import * as emaRejectionService from "./emaSupertrendRejection.service.js";
 import { startJob, getJob, cancelJob } from "./backtestJobs.js";
 
 // same input checks, status codes and error shape for every backtest endpoint
@@ -67,12 +70,24 @@ export const niftyBearishBreakoutOptionBuying = runBacktest(bearishBreakoutServi
 // POST /api/backtest/nifty_hull_ma_option_buying   options: { timeframe, strike, dayTarget, daySl }
 export const niftyHullMaOptionBuying = runBacktest(hullMaService.runNiftyHullMaOptionBuyingBacktest);
 
+// POST /api/backtest/nifty_ema_crossover_retest_option_buying   options: { timeframe, strike, dayTarget, daySl }
+export const niftyEmaCrossoverRetest = runBacktest(emaRetestService.runNiftyEmaCrossoverRetestBacktest);
+
+// POST /api/backtest/nifty_ema_supertrend_option_buying   options: { timeframe, strike, dayTarget, daySl }
+export const niftyEmaSupertrend = runBacktest(emaSupertrendService.runNiftyEmaSupertrendBacktest);
+
+// POST /api/backtest/nifty_ema_supertrend_rejection_option_buying   options: { timeframe, strike, dayTarget, daySl }
+export const niftyEmaSupertrendRejection = runBacktest(emaRejectionService.runNiftyEmaSupertrendRejectionBacktest);
+
 // ---------- background date-range runs (custom hourly strategy) ----------
 
 // strategies that can run a date range as a background job: runner + option check (400 before any job starts)
 const RANGE_JOBS = {
   nifty_hourly_range_touch_custom: { run: hourlyRangeService.runNiftyHourlyRangeTouchCustomBacktest, validate: hourlyRangeService.validateCustomOptions },
   nifty_hull_ma_option_buying: { run: hullMaService.runNiftyHullMaOptionBuyingBacktest, validate: hullMaService.validateHullOptions },
+  nifty_ema_crossover_retest_option_buying: { run: emaRetestService.runNiftyEmaCrossoverRetestBacktest, validate: emaRetestService.validateEmaOptions },
+  nifty_ema_supertrend_option_buying: { run: emaSupertrendService.runNiftyEmaSupertrendBacktest, validate: emaSupertrendService.validateEmaStOptions },
+  nifty_ema_supertrend_rejection_option_buying: { run: emaRejectionService.runNiftyEmaSupertrendRejectionBacktest, validate: emaRejectionService.validateEmaStRejectionOptions },
 };
 
 const startRangeJob = (key) => (req, res) => {
@@ -97,6 +112,15 @@ export const startHourlyCustomJob = startRangeJob("nifty_hourly_range_touch_cust
 
 // POST /api/backtest/nifty_hull_ma_option_buying/start
 export const startHullMaJob = startRangeJob("nifty_hull_ma_option_buying");
+
+// POST /api/backtest/nifty_ema_crossover_retest_option_buying/start
+export const startEmaRetestJob = startRangeJob("nifty_ema_crossover_retest_option_buying");
+
+// POST /api/backtest/nifty_ema_supertrend_option_buying/start
+export const startEmaSupertrendJob = startRangeJob("nifty_ema_supertrend_option_buying");
+
+// POST /api/backtest/nifty_ema_supertrend_rejection_option_buying/start
+export const startEmaRejectionJob = startRangeJob("nifty_ema_supertrend_rejection_option_buying");
 
 // GET /api/backtest/jobs/:id
 export const getBacktestJob = (req, res) => {

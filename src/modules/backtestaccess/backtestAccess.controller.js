@@ -3,6 +3,9 @@ import { BACKTEST_STRATEGIES } from "../backtest/backtest.registry.js";
 import { BacktestError, validateBacktestInput } from "../backtest/backtest.service.js";
 import { validateCustomOptions } from "../backtest/hourlyRange.service.js";
 import { validateHullOptions } from "../backtest/hullMa.service.js";
+import { validateEmaOptions } from "../backtest/emaRetest.service.js";
+import { validateEmaStOptions } from "../backtest/emaSupertrend.service.js";
+import { validateEmaStRejectionOptions } from "../backtest/emaSupertrendRejection.service.js";
 import { startJob, getJob, cancelJob } from "../backtest/backtestJobs.js";
 
 const fail = (res, err) => {
@@ -90,6 +93,9 @@ const running = new Set();
 const RANGE_VALIDATORS = {
   nifty_hourly_range_touch_custom: validateCustomOptions,
   nifty_hull_ma_option_buying: validateHullOptions,
+  nifty_ema_crossover_retest_option_buying: validateEmaOptions,
+  nifty_ema_supertrend_option_buying: validateEmaStOptions,
+  nifty_ema_supertrend_rejection_option_buying: validateEmaStRejectionOptions,
 };
 const RANGE_KEYS = new Set(Object.keys(RANGE_VALIDATORS));
 const MAX_USER_RANGE_DAYS = 31;
