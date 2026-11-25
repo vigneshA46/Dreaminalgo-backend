@@ -25,6 +25,7 @@
 
 import { round, minutesBetween, LOTSIZE, TRADE_END } from "./backtest.service.js";
 import { runDays, summarize, inr } from "./backtestRunner.js";
+import { cleanCandles, optionMarkers } from "./charts.js";
 
 // =========================
 // CONFIG
@@ -94,7 +95,62 @@ class BearishBreakoutDaySim {
       out.legCandles[side] = { strike: l.strike, candles15: l.candles15, ha5: l.ha5 };
     }
     out.dataGaps = this.legs.CE.gaps + this.legs.PE.gaps;
+    out.charts = this.buildCharts();
     return out;
+  }
+
+  /** per option: the 15-min chart with the marked entry level, and the 5-min Heikin Ashi chart with the trailing stop */
+  buildCharts() {
+    const charts = [];
+    for (const side of ["CE", "PE"]) {
+      const l = this.legs[side];
+      const mine = this.trades.filter((t) => t.side === side);
+      if (!l.strike) continue;
+
+      // marked level: from the candle that set it until the next mark or the entry of this leg
+      const marks = this.events.filter((e) => e.type === "MARK" && e.side === side);
+      const entries = this.events.filter((e) => e.type === "ENTRY" && e.side === side).map((e) => e.time);
+      const levels = marks.map((m, i) => {
+        const nextMark = marks[i + 1]?.time;
+        const entry = entries.find((t) => t >= m.time);
+        const to = [nextMark, entry].filter(Boolean).sort()[0] || "15:29";
+        return { name: `entry above ${m.level}`, value: m.level, color: "#7048e8", dash: "5 4", from: m.time, to };
+      });
+      charts.push({
+        id: `${side}-15`,
+        title: `${side} ${l.strike} · 15-min`,
+        subtitle: "purple line = latest bearish candle high + 4 (entry level)",
+        tf: 15,
+        candles: cleanCandles(l.candles15),
+        lines: [],
+        levels,
+        markers: optionMarkers(mine),
+      });
+
+      // trailing stop per HA candle while a trade is open: entry candle low first, then every Heikin Ashi low - 2
+      const ha = l.ha5;
+      const stop = ha.map((c) => {
+        for (const t of mine) {
+          if (c.end > t.entryTime && c.time <= t.exitTime) {
+            let sl = t.initialSl;
+            for (const mv of t.slMoves || []) if (mv.time <= c.time) sl = mv.sl;
+            return sl;
+          }
+        }
+        return null;
+      });
+      charts.push({
+        id: `${side}-ha`,
+        title: `${side} ${l.strike} · 5-min Heikin Ashi`,
+        subtitle: "orange line = stop (entry candle low, then Heikin Ashi low - 2)",
+        tf: 5,
+        candles: cleanCandles(ha),
+        lines: [{ name: "Stop", color: "#f08c00", values: stop, step: true, width: 1.8 }],
+        levels: [],
+        markers: optionMarkers(mine),
+      });
+    }
+    return charts;
   }
 
   // ---------- strike selection ----------

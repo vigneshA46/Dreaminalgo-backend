@@ -24,6 +24,7 @@
 
 import { round, minutesBetween, LOTSIZE, TRADE_END, BacktestError } from "./backtest.service.js";
 import { runDays, summarize, inr } from "./backtestRunner.js";
+import { indexChart, indexMarkers, optionTradeCharts } from "./charts.js";
 
 // =========================
 // CONFIG
@@ -150,7 +151,34 @@ export class EmaDaySim {
   }
 
   dayExtras() {
-    return { emaCandles: this.candleRows, warmup: this.warmup, dayStoppedBy: this.dayStoppedBy };
+    const tf = this.rules.timeframe;
+    const rows = this.candleRows;
+    const hasSt = rows.some((r) => r.supertrend !== undefined);
+    const lines = [
+      { name: "EMA 5", color: "#212529", key: "ema5", width: 1.6 },
+      { name: "EMA 10", color: "#f08c00", key: "ema10", width: 1.6 },
+    ];
+    if (hasSt) lines.push({ name: "Supertrend (10, 1.5)", color: "#2f9e44", key: "supertrend", colorKey: "trend", colorMap: { buy: "#2f9e44", sell: "#e03131" }, width: 1.8 });
+    const info = [];
+    for (const r of rows) {
+      if (r.cross) info.push({ time: r.time, kind: "info", at: r.cross.includes("above") ? "low" : "high", text: r.cross.includes("above") ? "EMA5 crossed above EMA10" : "EMA5 crossed below EMA10" });
+      if (r.setup && r.setup !== "supertrend against") info.push({ time: r.time, kind: "info", at: "high", text: r.setup === "confirmed" ? "close confirmed" : r.setup === "rejection" ? "Supertrend rejection" : "EMA5 retest" });
+    }
+    return {
+      emaCandles: this.candleRows,
+      warmup: this.warmup,
+      dayStoppedBy: this.dayStoppedBy,
+      charts: [
+        indexChart({
+          title: `NIFTY ${tf}-min · EMA 5 / EMA 10${hasSt ? " / Supertrend" : ""}`,
+          tf,
+          rows,
+          lines,
+          markers: [...info, ...indexMarkers(this.trades)],
+        }),
+        ...optionTradeCharts(this.data, this.trades, tf),
+      ],
+    };
   }
 
   optionBar(side, strike, hhmm) {

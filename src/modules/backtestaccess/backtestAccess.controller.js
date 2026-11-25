@@ -6,7 +6,7 @@ import { validateHullOptions } from "../backtest/hullMa.service.js";
 import { validateEmaOptions } from "../backtest/emaRetest.service.js";
 import { validateEmaStOptions } from "../backtest/emaSupertrend.service.js";
 import { validateEmaStRejectionOptions } from "../backtest/emaSupertrendRejection.service.js";
-import { startJob, getJob, cancelJob, stashResult, getSaveSource } from "../backtest/backtestJobs.js";
+import { startJob, getJob, cancelJob, stashResult, getSaveSource, getJobCharts } from "../backtest/backtestJobs.js";
 import { saveRun, readSaved } from "./backtestSaved.service.js";
 
 const fail = (res, err) => {
@@ -147,7 +147,7 @@ export const runMyBacktest = async (req, res) => {
     });
 
     // writers can save what they just ran: the server keeps its own copy and hands out a token
-    const saveToken = result.success && access.can_write ? stashResult({ owner: `user:${userId}`, key, result }) : undefined;
+    const saveToken = result.success && access.can_write ? stashResult({ owner: `user:${userId}`, key, result, options: req.body?.options ?? null }) : undefined;
     res.status(result.success ? 200 : 502).json(
       result.success ? { ...result, ...(saveToken ? { saveToken } : {}) } : { ...result, message: "Backtest failed for this day — see errors / logs" }
     );
@@ -232,6 +232,14 @@ export const getMyBacktestJob = (req, res) => {
   res.status(200).json({ success: true, ...job });
 };
 
+// GET /api/backtest-access/my/jobs/:id/charts/:date   chart specs of one day of the run (memory only, not saved anywhere)
+export const getMyJobCharts = (req, res) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(req.params.date)) return res.status(400).json({ success: false, message: "date must be YYYY-MM-DD" });
+  const charts = getJobCharts(req.params.id, `user:${req.user.id}`, req.params.date);
+  if (charts === null) return res.status(404).json({ success: false, message: "Backtest not found" });
+  res.status(200).json({ success: true, charts });
+};
+
 // POST /api/backtest-access/my/jobs/:id/cancel
 export const cancelMyBacktestJob = (req, res) => {
   if (!cancelJob(req.params.id, `user:${req.user.id}`)) return res.status(404).json({ success: false, message: "Backtest not found" });
@@ -261,7 +269,7 @@ export const saveMyBacktest = async (req, res) => {
     if (!source || source.key !== key) {
       return res.status(404).json({ success: false, message: "This run is no longer available to save (it expired or the server restarted) — run it again" });
     }
-    const out = await saveRun({ userId, key, result: source.result, replace });
+    const out = await saveRun({ userId, key, result: source.result, options: source.options, replace });
     res.status(200).json({ success: true, ...out });
   } catch (err) {
     const status = err instanceof BacktestError ? err.status : 500;

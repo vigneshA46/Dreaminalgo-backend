@@ -8,7 +8,7 @@ import * as hullMaService from "./hullMa.service.js";
 import * as emaRetestService from "./emaRetest.service.js";
 import * as emaSupertrendService from "./emaSupertrend.service.js";
 import * as emaRejectionService from "./emaSupertrendRejection.service.js";
-import { startJob, getJob, cancelJob } from "./backtestJobs.js";
+import { startJob, getJob, cancelJob, getJobCharts } from "./backtestJobs.js";
 
 // same input checks, status codes and error shape for every backtest endpoint
 const runBacktest = (runner) => async (req, res) => {
@@ -127,6 +127,13 @@ export const getBacktestJob = (req, res) => {
   const job = getJob(req.params.id);
   if (!job) return res.status(404).json({ success: false, message: "Backtest job not found (finished a long time ago, or the server restarted)" });
   res.status(200).json({ success: true, ...job });
+};
+
+// GET /api/backtest/jobs/:id/charts/:date
+export const getBacktestJobCharts = (req, res) => {
+  const charts = getJobCharts(req.params.id, undefined, req.params.date);
+  if (charts === null) return res.status(404).json({ success: false, message: "Backtest job not found" });
+  res.status(200).json({ success: true, charts });
 };
 
 // POST /api/backtest/jobs/:id/cancel

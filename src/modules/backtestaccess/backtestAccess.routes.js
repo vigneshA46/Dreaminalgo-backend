@@ -13,6 +13,7 @@ import {
   startMyBacktestJob,
   getMyBacktestJob,
   cancelMyBacktestJob,
+  getMyJobCharts,
   updatePermissions,
   saveMyBacktest,
   getMySavedBacktests,
@@ -36,6 +37,7 @@ router.post("/my/start/:key", authenticate, startMyBacktestJob);
 router.post("/my/save/:key", authenticate, saveMyBacktest);
 router.get("/my/saved/:key", authenticate, getMySavedBacktests);
 router.get("/my/jobs/:id", authenticate, getMyBacktestJob);
+router.get("/my/jobs/:id/charts/:date", authenticate, getMyJobCharts);
 router.post("/my/jobs/:id/cancel", authenticate, cancelMyBacktestJob);
 
 export default router;

@@ -35,6 +35,7 @@ export function startJob({ owner, key, input, run }) {
     id: randomUUID(),
     owner,
     key,
+    options: input.options ?? null, // the settings of this run (no credentials), saved together with its days
     status: "running", // running | done | stopped | error
     progress: { done: 0, total: 0, date: null },
     result: null,
@@ -42,6 +43,7 @@ export function startJob({ owner, key, input, run }) {
     startedAt: Date.now(),
     finishedAt: null,
     cancel: false,
+    charts: new Map(), // date -> chart specs of that day (kept in memory only, fetched when a day is opened)
   };
   jobs.set(job.id, job);
 
@@ -53,6 +55,7 @@ export function startJob({ owner, key, input, run }) {
       job.progress = progress;
     },
     isCancelled: () => job.cancel,
+    collectCharts: (date, charts) => job.charts.set(date, charts),
   };
 
   Promise.resolve()
@@ -106,9 +109,9 @@ export function cancelJob(id, owner) {
 const stash = new Map(); // token -> { owner, key, result, at }
 
 /** remember a finished single-day result for 2 h so the page can ask to save it */
-export function stashResult({ owner, key, result }) {
+export function stashResult({ owner, key, result, options = null }) {
   const token = randomUUID();
-  stash.set(token, { owner, key, result, at: Date.now() });
+  stash.set(token, { owner, key, result, options, at: Date.now() });
   return token;
 }
 
@@ -122,9 +125,16 @@ export function getSaveSource(token, owner) {
   const j = jobs.get(token);
   if (j) {
     if (j.owner !== owner || j.status === "running" || !j.result) return null;
-    return { key: j.key, result: j.result };
+    return { key: j.key, result: j.result, options: j.options };
   }
   const s = stash.get(token);
   if (!s || s.owner !== owner) return null;
-  return { key: s.key, result: s.result };
+  return { key: s.key, result: s.result, options: s.options };
+}
+
+/** chart specs of one day of a (running or finished) job, owner-checked */
+export function getJobCharts(id, owner, date) {
+  const j = jobs.get(id);
+  if (!j || (owner !== undefined && j.owner !== owner)) return null;
+  return j.charts.get(date) || [];
 }

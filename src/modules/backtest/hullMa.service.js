@@ -22,6 +22,7 @@
 
 import { round, minutesBetween, LOTSIZE, TRADE_END, BacktestError } from "./backtest.service.js";
 import { runDays, summarize, inr } from "./backtestRunner.js";
+import { indexChart, indexMarkers, optionTradeCharts } from "./charts.js";
 
 // =========================
 // CONFIG
@@ -160,7 +161,25 @@ class HullDaySim {
   }
 
   dayExtras() {
-    return { hmaCandles: this.candleRows, warmup: this.warmup, dayStoppedBy: this.dayStoppedBy };
+    const tf = this.rules.timeframe;
+    const rows = this.candleRows;
+    const signals = rows.filter((r) => r.signal && r.signal !== "START").map((r) => ({ time: r.time, kind: "info", at: "high", text: `HMA turned ${r.signal === "BUY CE" ? "green" : "red"}` }));
+    return {
+      hmaCandles: this.candleRows,
+      warmup: this.warmup,
+      dayStoppedBy: this.dayStoppedBy,
+      charts: [
+        indexChart({
+          title: `NIFTY ${tf}-min · Hull MA 24`,
+          subtitle: "green = Hull MA rising, red = falling",
+          tf,
+          rows,
+          lines: [{ name: "Hull MA 24", color: "#2f9e44", key: "hma", colorKey: "color", colorMap: { green: "#2f9e44", red: "#e03131" }, width: 2 }],
+          markers: [...signals, ...indexMarkers(this.trades)],
+        }),
+        ...optionTradeCharts(this.data, this.trades, tf),
+      ],
+    };
   }
 
   // ---------- orders ----------

@@ -13,9 +13,38 @@ import { summarize } from "../backtest/backtestRunner.js";
 
 const LOTSIZE = 65;
 // per-day fields that are big or stored elsewhere: candles, event timeline, tables rendered only on a single-day run
-const NOT_IN_META = new Set(["trades", "events", "hmaCandles", "emaCandles", "indexCandles", "legCandles", "supertrend", "ce", "pe"]);
+const NOT_IN_META = new Set(["trades", "events", "hmaCandles", "emaCandles", "indexCandles", "legCandles", "supertrend", "charts", "ce", "pe"]);
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const r2 = (x) => Math.round(Number(x || 0) * 100) / 100;
+
+const abs = (v) => (v === null || v === undefined ? null : Math.abs(Number(v)));
+
+/**
+ * The configs a day was run with, as one JSON: the main ones by name (timeframe, strike, day SL, day MTM target ...),
+ * the options as the user sent them, and every other parameter of the strategy under "params".
+ */
+export function buildConfigs(params, options) {
+  const p = params && typeof params === "object" ? params : {};
+  const o = options && typeof options === "object" ? options : null;
+  const strike = typeof o?.strike === "string" ? o.strike : typeof p.strike === "string" ? p.strike.split(" from ")[0] : null;
+  const main = {
+    timeframeMinutes: p.candleMinutes ?? p.entryCandleMinutes ?? o?.timeframe ?? null,
+    strike,
+    daySl: abs(p.dayMaxLoss),
+    dayMtmTarget: p.dayTarget ?? p.dayMaxProfit ?? null,
+    cycleSl: abs(p.cycleMaxLoss),
+    cycleProfit: p.cycleMaxProfit ?? null,
+    tradeProfit: p.tradeMaxProfit ?? null,
+    touchBufferPoints: p.touchBufferPoints ?? null,
+    lotSize: p.lotSize ?? null,
+    lots: p.lots ?? null,
+    squareOff: p.tradeEnd ?? p.dayClose ?? null,
+  };
+  const out = Object.fromEntries(Object.entries(main).filter(([, v]) => v !== null && v !== undefined));
+  if (o && Object.keys(o).length) out.options = o;
+  out.params = p;
+  return out;
+}
 
 const stamp = (date, hhmm) => `${date} ${hhmm || "00:00"}:00`;
 
@@ -35,20 +64,20 @@ async function insertRows(client, table, columns, rows, chunk = 200) {
   }
 }
 
-const LEG_COLS = ["strategy_key", "trade_date", "leg", "strikes", "trades", "wins", "pnl", "leg_data", "day_meta", "settings", "run_id", "saved_by"];
+const LEG_COLS = ["strategy_key", "trade_date", "leg", "strikes", "trades", "wins", "pnl", "leg_data", "day_meta", "settings", "configs", "run_id", "saved_by"];
 const TRADE_COLS = [
   "strategy_key", "trade_date", "run_id", "trade_id", "timestamp", "event_type", "leg_name", "symbol", "side",
   "lots", "quantity", "price", "reason", "pnl", "cum_pnl", "details", "saved_by",
 ];
 
-function dayRows(day, key, runId, userId, settings) {
+function dayRows(day, key, runId, userId, settings, configs) {
   const meta = Object.fromEntries(Object.entries(day).filter(([k]) => !NOT_IN_META.has(k)));
   const legs = ["CE", "PE"].map((side) => {
     const leg = day[side.toLowerCase()] || { pnl: 0, strikes: [] };
     const mine = day.trades.filter((t) => t.side === side);
     return [
       key, day.date, side, JSON.stringify(leg.strikes || []), mine.length, mine.filter((t) => t.pnl > 0).length,
-      r2(leg.pnl), JSON.stringify(leg), JSON.stringify(meta), JSON.stringify(settings || null), runId, userId,
+      r2(leg.pnl), JSON.stringify(leg), JSON.stringify(meta), JSON.stringify(settings || null), JSON.stringify(configs), runId, userId,
     ];
   });
 
@@ -71,7 +100,7 @@ function dayRows(day, key, runId, userId, settings) {
  * replace === undefined: if some of the days are already saved, change nothing and answer with the list
  * replace === true: overwrite the saved days with this run; false: keep them and save only the new days
  */
-export async function saveRun({ userId, key, result, replace }) {
+export async function saveRun({ userId, key, result, options = null, replace }) {
   const days = (result?.days || []).filter((d) => d.status === "ok");
   if (!days.length) throw new BacktestError("This run has no finished trading day to save", 400);
   const dates = days.map((d) => d.date);
@@ -89,6 +118,7 @@ export async function saveRun({ userId, key, result, replace }) {
   if (!toSave.length) return { status: "saved", saved: 0, replaced: 0, skipped: existing.length };
 
   const runId = randomUUID();
+  const configs = buildConfigs(result.params, options);
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -100,7 +130,7 @@ export async function saveRun({ userId, key, result, replace }) {
     const legRows = [];
     const tradeRows = [];
     for (const d of toSave) {
-      const { legs, trades } = dayRows(d, key, runId, userId, result.params);
+      const { legs, trades } = dayRows(d, key, runId, userId, result.params, configs);
       legRows.push(...legs);
       tradeRows.push(...trades);
     }
@@ -124,7 +154,7 @@ export async function readSaved({ key, from, to }) {
   const params = [key, lo, hi];
 
   const legs = await pool.query(
-    `SELECT l.trade_date::text AS d, l.leg, l.leg_data, l.day_meta, l.settings, l.created_at, u.fullname AS saved_by_name
+    `SELECT l.trade_date::text AS d, l.leg, l.leg_data, l.day_meta, l.settings, l.configs, l.created_at, u.fullname AS saved_by_name
      FROM backtest_trade_legs l
      LEFT JOIN users u ON u.id = l.saved_by
      WHERE l.strategy_key = $1
@@ -176,7 +206,7 @@ export async function readSaved({ key, from, to }) {
       cumulativePnl: r2(cumulative),
       totalTrades: list.length,
       trades: list,
-      saved: { by: first.saved_by_name || null, at: first.created_at, settings: first.settings || null },
+      saved: { by: first.saved_by_name || null, at: first.created_at, settings: first.settings || null, configs: first.configs || buildConfigs(first.settings, null) },
     });
   }
 

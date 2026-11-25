@@ -21,6 +21,7 @@
 
 import { round, minutesBetween, LOTSIZE, TRADE_END } from "./backtest.service.js";
 import { runDays, summarize, inr } from "./backtestRunner.js";
+import { cleanCandles, optionMarkers } from "./charts.js";
 
 // =========================
 // CONFIG
@@ -169,7 +170,38 @@ class LevelBreakoutDaySim {
         CE: this.legs.CE.stRows,
         PE: this.legs.PE.stRows,
       },
+      charts: this.buildCharts(),
     };
+  }
+
+  /** per option: 5-min candles with the Supertrend, the buy-above level and the first two targets, entries / exits */
+  buildCharts() {
+    const charts = [];
+    for (const side of ["CE", "PE"]) {
+      const leg = this.legs[side];
+      if (!leg.strike || !leg.levels) continue;
+      const L = leg.levels;
+      const rows = leg.stRows;
+      charts.push({
+        id: `${side}-st`,
+        title: `${side} ${leg.strike} · ${CANDLE_MINUTES}-min · Supertrend (${ST_PERIOD}, ${ST_FACTOR})`,
+        subtitle: "blue line = buy above, grey dashed = T1 / T2",
+        tf: CANDLE_MINUTES,
+        candles: cleanCandles(rows),
+        lines: [{
+          name: "Supertrend", color: "#2f9e44", width: 1.8,
+          values: rows.map((r) => r.supertrend),
+          colors: rows.map((r) => (r.trend === "buy" ? "#2f9e44" : r.trend === "sell" ? "#e03131" : null)),
+        }],
+        levels: [
+          { name: `buy above ${L.buyAbove}`, value: L.buyAbove, color: "#1c7ed6" },
+          { name: `T1 ${L.buyTargets[0]}`, value: L.buyTargets[0], color: "#868e96", dash: "4 4" },
+          { name: `T2 ${L.buyTargets[1]}`, value: L.buyTargets[1], color: "#868e96", dash: "4 4" },
+        ],
+        markers: optionMarkers(this.trades.filter((t) => t.side === side)),
+      });
+    }
+    return charts;
   }
 
   // ---------- selection ----------

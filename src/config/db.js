@@ -789,6 +789,8 @@ UNIQUE (user_id, strategy_id, broker_account_id, type);
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+    /* the configs of the run (timeframe, strike, SL, MTM ... + the strategy's other parameters) */
+    await pool.query(`ALTER TABLE backtest_trade_legs ADD COLUMN IF NOT EXISTS configs JSONB;`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_backtest_trades_day ON backtest_trades (strategy_key, trade_date);`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_backtest_trades_trade ON backtest_trades (trade_id);`);
 

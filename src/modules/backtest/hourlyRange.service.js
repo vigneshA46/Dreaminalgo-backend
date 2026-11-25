@@ -42,6 +42,7 @@ import {
   LOTSIZE,
 } from "./backtest.service.js";
 import { summarize, inr } from "./backtestRunner.js";
+import { indexMarkers, optionTradeCharts, cleanCandles } from "./charts.js";
 
 // =========================
 // CONFIG
@@ -447,6 +448,31 @@ class HourlyRangeDaySim {
     return out.map((c) => ({ ...c, avg: round((c.open + c.high + c.low + c.close) / 4) }));
   }
 
+  /** NIFTY chart with the hourly High / Low lines and the entries / exits, plus the traded options */
+  buildCharts() {
+    const tf = this.candleMinutes;
+    const candles = this.indexCandles();
+    const levels = [];
+    for (const c of this.cycles) {
+      if (c.high === null) continue;
+      levels.push({ name: `C${c.k} High ${c.high}`, value: c.high, color: "#2f9e44", dash: "6 4", from: c.rangeStart, to: c.windowEnd });
+      levels.push({ name: `C${c.k} Low ${c.low}`, value: c.low, color: "#e03131", dash: "6 4", from: c.rangeStart, to: c.windowEnd });
+    }
+    return [
+      {
+        id: "index",
+        title: `NIFTY ${tf}-min · hourly High / Low`,
+        subtitle: "dashed lines = each hourly range, traded in the next hour",
+        tf,
+        candles: cleanCandles(candles),
+        lines: [],
+        levels,
+        markers: indexMarkers(this.trades),
+      },
+      ...optionTradeCharts(this.options, this.trades, tf),
+    ];
+  }
+
   cycleReport() {
     return this.cycles.map((c) => ({
       cycle: c.k,
@@ -669,6 +695,10 @@ async function runHourlyRangeTouch(input, { strategy, rules }) {
       ...(rules.includeCandles && !input.slim ? { indexCandles: sim.indexCandles() } : {}),
       trades: sim.trades,
     };
+    // the day's charts: handed to a background job's store, or sent with a single-day result (never saved)
+    const charts = sim.buildCharts();
+    if (input.collectCharts) input.collectCharts(day, charts);
+    else if (input.includeEvents) out.charts = charts;
     if (input.includeEvents) out.events = sim.events;
     days.push(out);
     log.info(`CE ${ce.pnl} | PE ${pe.pnl} | day ${dayPnl} | trades ${sim.trades.length}`, day);

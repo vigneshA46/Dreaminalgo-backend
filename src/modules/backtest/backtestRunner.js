@@ -18,6 +18,7 @@ import {
   isExpiryDay,
   prevTradingDay,
 } from "./backtest.service.js";
+import { optionTradeCharts } from "./charts.js";
 
 function legReport(leg) {
   return {
@@ -168,6 +169,13 @@ export async function runDays(input, SimClass, label, hooks = {}) {
     };
     // strategy-specific per-day fields (levels, ATM ...)
     if (sim.dayExtras) Object.assign(out, sim.dayExtras());
+    // charts of the day: from the strategy, or the traded options with their entries / exits. Handed to a
+    // background job's store, or sent with a single-day result; never stored in the database
+    let charts = out.charts;
+    delete out.charts;
+    if (!charts) charts = optionTradeCharts(today, sim.trades, 1);
+    if (input.collectCharts) input.collectCharts(day, charts);
+    else if (input.includeEvents) out.charts = charts;
     if (input.includeEvents) out.events = sim.events;
     days.push(out);
     log.info(`CE ${ce.pnl} | PE ${pe.pnl} | day ${dayPnl} | trades ${sim.trades.length}`, day);
