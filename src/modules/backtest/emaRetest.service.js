@@ -8,9 +8,9 @@
  *   - BUY setup (-> buy CE):
  *       1. EMA 5 crosses above EMA 10 (read on a candle close)
  *       2. a LATER candle closes above EMA 10 (confirmation, no entry yet)
- *       3. a LATER candle retests EMA 5: its low reaches EMA 5 (low <= EMA 5 of that candle)  -> entry
+ *       3. a LATER candle retests EMA 5: EMA 5 lies between its low and high (low <= EMA 5 <= high)  -> entry
  *     SELL setup (-> buy PE): mirrored (cross below, a candle closes below EMA 10, a candle's high
- *     reaches EMA 5). Each crossover is one setup, at most one entry per crossover.
+ *     contains EMA 5). Each crossover is one setup, at most one entry per crossover.
  *   - a new crossover in the other direction cancels an unfinished setup and starts the opposite one
  *   - entry is filled at the first option tick after the retest candle closes
  *   - stop loss and target are the same thing: the REVERSE crossover (a BUY trade exits when EMA 5 crosses
@@ -344,7 +344,7 @@ export class EmaDaySim {
     }
 
     if (s.stage === "RETEST" && i > s.confirmIdx) {
-      const touched = s.side === "BUY" ? c.low <= e5[i] : c.high >= e5[i];
+      const touched = c.low <= e5[i] && e5[i] <= c.high; // EMA 5 lies inside the candle's range
       if (touched) {
         row.setup = "retest";
         if (this.now >= TRADE_END) return;
@@ -458,7 +458,7 @@ export async function runNiftyEmaCrossoverRetestBacktest(input) {
         indicator: `EMA ${FAST} and EMA ${SLOW} of the close on NIFTY ${rules.timeframe}-min candles, previous days loaded so they are warmed up`,
         candleMinutes: rules.timeframe,
         strike: `${strikeLabel(rules.strikeOffset)} from the signal candle close (ATM = nearest ${STRIKE_STEP}), nearest weekly expiry`,
-        entry: `EMA${FAST} crossover -> a later candle closes beyond EMA${SLOW} -> a later candle retests EMA${FAST} (touch) -> entry at the next tick`,
+        entry: `EMA${FAST} crossover -> a later candle closes beyond EMA${SLOW} -> a later candle retests EMA${FAST} (EMA 5 inside the candle range) -> entry at the next tick`,
         exit: "reverse crossover of EMA 5 and EMA 10 (stop loss and target are the same), read on the candle close",
         dayTarget: rules.dayTarget,
         dayMaxLoss: rules.dayMaxLoss,

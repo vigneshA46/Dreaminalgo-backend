@@ -8,9 +8,9 @@
  *   - BUY setup (-> buy CE):
  *       1. EMA 5 crosses above EMA 10 (read on a candle close)
  *       2. a LATER candle closes above EMA 10 while the Supertrend is bullish (confirmation, no entry yet)
- *       3. a LATER candle retests EMA 5 (its low reaches EMA 5) while the Supertrend is still bullish -> entry
+ *       3. a LATER candle retests EMA 5 (EMA 5 lies between its low and high) while the Supertrend is still bullish -> entry
  *     SELL setup (-> buy PE): mirrored (cross below, close below EMA 10 with a bearish Supertrend, the
- *     candle's high reaches EMA 5 with the Supertrend still bearish).
+ *     candle's range contains EMA 5 with the Supertrend still bearish).
  *   - if the Supertrend turns against an unfinished setup before the entry, the setup goes back to step 2
  *     (a new confirming close with the Supertrend on its side is needed); a new crossover in the other
  *     direction replaces the setup
@@ -59,9 +59,9 @@ export class EmaStDaySim extends EmaDaySim {
     });
   }
 
-  /** is this candle the retest that triggers the entry? (strategy 2: it touches EMA 5) */
+  /** is this candle the retest that triggers the entry? (strategy 2: EMA 5 is inside its range) */
   retestHit(buy, c, ema5) {
-    return buy ? c.low <= ema5 : c.high >= ema5;
+    return c.low <= ema5 && ema5 <= c.high; // EMA 5 lies inside the candle's range
   }
 
   /** label shown on the retest candle */
