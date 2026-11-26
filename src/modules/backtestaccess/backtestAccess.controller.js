@@ -6,6 +6,7 @@ import { validateHullOptions } from "../backtest/hullMa.service.js";
 import { validateEmaOptions } from "../backtest/emaRetest.service.js";
 import { validateEmaStOptions } from "../backtest/emaSupertrend.service.js";
 import { validateEmaStRejectionOptions } from "../backtest/emaSupertrendRejection.service.js";
+import { validateSt1mOptions } from "../backtest/supertrendEma1min.service.js";
 import { startJob, getJob, cancelJob, stashResult, getSaveSource, getJobCharts } from "../backtest/backtestJobs.js";
 import { saveRun, readSaved } from "./backtestSaved.service.js";
 
@@ -106,6 +107,7 @@ const RANGE_VALIDATORS = {
   nifty_ema_crossover_retest_option_buying: validateEmaOptions,
   nifty_ema_supertrend_option_buying: validateEmaStOptions,
   nifty_ema_supertrend_rejection_option_buying: validateEmaStRejectionOptions,
+  nifty_supertrend_ema_buying_1min: validateSt1mOptions,
 };
 const RANGE_KEYS = new Set(Object.keys(RANGE_VALIDATORS));
 const MAX_USER_RANGE_DAYS = 31;
