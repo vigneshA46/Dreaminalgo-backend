@@ -93,6 +93,7 @@ export const niftySdFibBuyAboveSt = runBacktest(sdFibService.runNiftySdFibBuyAbo
 
 // strategies that can run a date range as a background job: runner + option check (400 before any job starts)
 const RANGE_JOBS = {
+  nifty_option_level_breakout: { run: levelBreakoutService.runNiftyOptionLevelBreakoutBacktest, validate: levelBreakoutService.validateLevelBreakoutOptions },
   nifty_sd_fib_buy_above_st: { run: sdFibService.runNiftySdFibBuyAboveStBacktest, validate: sdFibService.validateSdFibOptions },
   pivot_option_buying_cum: { run: pivotCumService.runPivotOptionBuyingCumRangeBacktest, validate: pivotCumService.validateCumOptions },
   nifty_hourly_range_touch_custom: { run: hourlyRangeService.runNiftyHourlyRangeTouchCustomBacktest, validate: hourlyRangeService.validateCustomOptions },
@@ -143,6 +144,9 @@ export const startPivotCumJob = startRangeJob("pivot_option_buying_cum");
 
 // POST /api/backtest/nifty_sd_fib_buy_above_st/start
 export const startSdFibJob = startRangeJob("nifty_sd_fib_buy_above_st");
+
+// POST /api/backtest/nifty_option_level_breakout/start
+export const startLevelBreakoutJob = startRangeJob("nifty_option_level_breakout");
 
 // GET /api/backtest/jobs/:id
 export const getBacktestJob = (req, res) => {

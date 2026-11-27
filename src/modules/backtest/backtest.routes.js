@@ -1,5 +1,5 @@
 import express from "express";
-import { pivotOptionBuyingCum, niftyOptionPivotBuffer, niftyOptionPivotFixedTarget, niftyOptionLevelBreakout, niftyHourlyRangeTouch, niftyHourlyRangeTouch1m, niftyHourlyRangeTouchCustom, niftyBearishBreakoutOptionBuying, niftyHullMaOptionBuying, niftyEmaCrossoverRetest, niftyEmaSupertrend, niftyEmaSupertrendRejection, niftySupertrendEmaBuying1min, startSupertrendEma1minJob, startPivotCumJob, niftySdFibBuyAboveSt, startSdFibJob, startHourlyCustomJob, startHullMaJob, startEmaRetestJob, startEmaSupertrendJob, startEmaRejectionJob, getBacktestJob, getBacktestJobCharts, cancelBacktestJob } from "./backtest.controller.js";
+import { pivotOptionBuyingCum, niftyOptionPivotBuffer, niftyOptionPivotFixedTarget, niftyOptionLevelBreakout, niftyHourlyRangeTouch, niftyHourlyRangeTouch1m, niftyHourlyRangeTouchCustom, niftyBearishBreakoutOptionBuying, niftyHullMaOptionBuying, niftyEmaCrossoverRetest, niftyEmaSupertrend, niftyEmaSupertrendRejection, niftySupertrendEmaBuying1min, startSupertrendEma1minJob, startPivotCumJob, niftySdFibBuyAboveSt, startSdFibJob, startLevelBreakoutJob, startHourlyCustomJob, startHullMaJob, startEmaRetestJob, startEmaSupertrendJob, startEmaRejectionJob, getBacktestJob, getBacktestJobCharts, cancelBacktestJob } from "./backtest.controller.js";
 
 const router = express.Router();
 
@@ -28,6 +28,7 @@ router.post("/nifty_ema_supertrend_rejection_option_buying/start", startEmaRejec
 router.post("/nifty_supertrend_ema_buying_1min/start", startSupertrendEma1minJob);
 router.post("/pivot_option_buying_cum/start", startPivotCumJob);
 router.post("/nifty_sd_fib_buy_above_st/start", startSdFibJob);
+router.post("/nifty_option_level_breakout/start", startLevelBreakoutJob);
 router.get("/jobs/:id", getBacktestJob);
 router.get("/jobs/:id/charts/:date", getBacktestJobCharts);
 router.post("/jobs/:id/cancel", cancelBacktestJob);

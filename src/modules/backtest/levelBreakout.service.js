@@ -442,69 +442,79 @@ class LevelBreakoutDaySim {
 // RUNNER
 // =========================
 
+/** nothing to choose: the strategy has no settings (validation hook for the job / access routes) */
+export const validateLevelBreakoutOptions = () => {};
+
 export async function runNiftyOptionLevelBreakoutBacktest(input) {
-  const run = await runDays(input, LevelBreakoutDaySim, "level breakout");
-
-  // Supertrend exits per leg / day
-  for (const d of run.days.filter((x) => x.status === "ok")) {
-    for (const side of ["CE", "PE"]) {
-      d[side.toLowerCase()].trails = d.trades.filter((t) => t.side === side && t.exitType === "SUPERTREND").length;
+  const assemble = (run) => {
+    // Supertrend exits per leg / day
+    for (const d of run.days.filter((x) => x.status === "ok")) {
+      for (const side of ["CE", "PE"]) {
+        d[side.toLowerCase()].trails = d.trades.filter((t) => t.side === side && t.exitType === "SUPERTREND").length;
+      }
+      d.trails = d.ce.trails + d.pe.trails;
+      if (input.slim) delete d.supertrend; // range runs: the day dropdowns do not show the candle table
     }
-    d.trails = d.ce.trails + d.pe.trails;
-  }
 
-  const sum = summarize(run.days, LOTS);
-  let analysis = ["No traded days in this range."];
-  let summary = null;
-  if (sum) {
-    const { trades, head, tail } = sum;
-    summary = { ...sum.summary };
-    delete summary.byPivot;
-    const byTargets = {};
-    for (const t of trades) {
-      const k = `T${t.targetsHit}`;
-      byTargets[k] = byTargets[k] || { trades: 0, pnl: 0 };
-      byTargets[k].trades += 1;
-      byTargets[k].pnl = round(byTargets[k].pnl + t.pnl);
+    const sum = summarize(run.days, LOTS);
+    let analysis = ["No traded days in this range."];
+    let summary = null;
+    if (sum) {
+      const { trades, head, tail } = sum;
+      summary = { ...sum.summary };
+      delete summary.byPivot;
+      const byTargets = {};
+      for (const t of trades) {
+        const k = `T${t.targetsHit}`;
+        byTargets[k] = byTargets[k] || { trades: 0, pnl: 0 };
+        byTargets[k].trades += 1;
+        byTargets[k].pnl = round(byTargets[k].pnl + t.pnl);
+      }
+      summary.byTargetsHit = byTargets;
+
+      analysis = [...head];
+      if (trades.length) {
+        const st = trades.filter((t) => t.exitType === "SUPERTREND");
+        const fo = trades.filter((t) => t.exitType === "FORCE");
+        const net = (a) => inr(a.reduce((x, t) => x + t.pnl, 0));
+        const reached = trades.filter((t) => t.targetsHit > 0).length;
+        const best = Math.max(...trades.map((t) => t.targetsHit));
+        analysis.push(`${trades.length} trades: ${st.length} closed when the Supertrend (${ST_PERIOD}, ${ST_FACTOR}) turned sell (net ${net(st)}), ` +
+          `${fo.length} squared off at 15:14 (net ${net(fo)}). ${reached} reached at least T1 (best run: T${best}). Avg win ${inr(summary.avgWin)} vs avg loss ${inr(summary.avgLoss)}.`);
+        const sell = trades.filter((t) => t.supertrendAtEntry?.trend === "sell").length;
+        if (sell) analysis.push(`${sell} trade(s) were entered while the Supertrend was already in sell, so they only exit after it turns buy and then sell again, or at 15:14.`);
+      }
+      analysis.push(...tail.filter((x) => !x.startsWith("Best pivot")));
     }
-    summary.byTargetsHit = byTargets;
 
-    analysis = [...head];
-    if (trades.length) {
-      const st = trades.filter((t) => t.exitType === "SUPERTREND");
-      const fo = trades.filter((t) => t.exitType === "FORCE");
-      const net = (a) => inr(a.reduce((x, t) => x + t.pnl, 0));
-      const reached = trades.filter((t) => t.targetsHit > 0).length;
-      const best = Math.max(...trades.map((t) => t.targetsHit));
-      analysis.push(`${trades.length} trades: ${st.length} closed when the Supertrend (${ST_PERIOD}, ${ST_FACTOR}) turned sell (net ${net(st)}), ` +
-        `${fo.length} squared off at 15:14 (net ${net(fo)}). ${reached} reached at least T1 (best run: T${best}). Avg win ${inr(summary.avgWin)} vs avg loss ${inr(summary.avgLoss)}.`);
-      const sell = trades.filter((t) => t.supertrendAtEntry?.trend === "sell").length;
-      if (sell) analysis.push(`${sell} trade(s) were entered while the Supertrend was already in sell, so they only exit after it turns buy and then sell again, or at 15:14.`);
-    }
-    analysis.push(...tail.filter((x) => !x.startsWith("Best pivot")));
-  }
-
-  return {
-    success: run.success,
-    strategy: "nifty_option_level_breakout",
-    params: {
-      fromDate: input.fromDate,
-      toDate: input.toDate,
-      lotSize: LOTSIZE,
-      lots: LOTS,
-      strike: `ATM from NIFTY ${SELECT_TIME} 1-min close (nearest ${STRIKE_STEP}), fixed all day`,
-      rangePct: RANGE_PCT * 100,
-      targets: TARGET_COUNT,
-      candleMinutes: CANDLE_MINUTES,
-      exit: `Supertrend (${ST_PERIOD}, ${ST_FACTOR}) on the option's ${CANDLE_MINUTES}-min chart turning sell (read on the candle close), warmed up on the previous trading day; no point stop, no target exit`,
-      rearm: "5-min close below buy above after an exit",
-      tradeEnd: TRADE_END,
-    },
-    summary,
-    analysis,
-    days: run.days,
-    errors: run.errors,
-    logs: run.logs,
-    meta: run.meta,
+    return {
+      success: run.success,
+      strategy: "nifty_option_level_breakout",
+      params: {
+        fromDate: input.fromDate,
+        toDate: input.toDate,
+        lotSize: LOTSIZE,
+        lots: LOTS,
+        strike: `ATM from NIFTY ${SELECT_TIME} 1-min close (nearest ${STRIKE_STEP}), fixed all day`,
+        rangePct: RANGE_PCT * 100,
+        targets: TARGET_COUNT,
+        candleMinutes: CANDLE_MINUTES,
+        exit: `Supertrend (${ST_PERIOD}, ${ST_FACTOR}) on the option's ${CANDLE_MINUTES}-min chart turning sell (read on the candle close), warmed up on the previous trading day; no point stop, no target exit`,
+        rearm: "5-min close below buy above after an exit",
+        tradeEnd: TRADE_END,
+      },
+      summary,
+      analysis,
+      days: run.days,
+      errors: run.errors,
+      logs: run.logs,
+      meta: run.meta,
+    };
   };
+
+  const run = await runDays(input, LevelBreakoutDaySim, "level breakout", { assemble });
+  const out = assemble(run);
+  if (run.cancelled) out.cancelled = true;
+  if (input.onUpdate) input.onUpdate({ result: out, progress: { done: run.doneDays, total: run.totalDays, date: null } });
+  return out;
 }
