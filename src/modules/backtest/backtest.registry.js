@@ -14,6 +14,7 @@ import { runNiftyEmaCrossoverRetestBacktest } from "./emaRetest.service.js";
 import { runNiftyEmaSupertrendBacktest } from "./emaSupertrend.service.js";
 import { runNiftyEmaSupertrendRejectionBacktest } from "./emaSupertrendRejection.service.js";
 import { runNiftySupertrendEmaBuying1minBacktest } from "./supertrendEma1min.service.js";
+import { runNiftySdFibBuyAboveStBacktest } from "./sdFibBuyAbove.service.js";
 import {
   runNiftyHourlyRangeTouchBacktest,
   runNiftyHourlyRangeTouch1mBacktest,
@@ -111,5 +112,12 @@ export const BACKTEST_STRATEGIES = {
       "NIFTY option buying on EMA 5 / EMA 10 + Supertrend (10, 1.5) of the NIFTY index (1 / 3 / 5 / 15-min candles). First entry needs the close beyond the 09:16 reference line, later entries only Supertrend + EMA order. " +
       "ITM4 strike, lots 2, 4, 2, 4 ..., half the lots booked at Rs 3,000 trade profit, rest rides till the Supertrend flips. Day MTM target / SL (each on or off), square off 15:14.",
     run: runNiftySupertrendEmaBuying1minBacktest,
+  },
+  nifty_sd_fib_buy_above_st: {
+    title: "nifty_sd_fib_buy_above_st",
+    description:
+      "NIFTY ATM CE + PE, each on its own chart. Levels from a one-year NIFTY daily volatility (average + 1 SD of the log returns) times the option's 09:15 open; only BUY ABOVE (0.2611 of the 1SD range) trades. " +
+      "Entry on a tick through BUY ABOVE + 8 or a 5-min close above it, with the option's Supertrend (10, 3) bullish. Only exits: Supertrend bearish on a 5-min close, and 15:14. 1 lot, re-entries allowed, no day limits.",
+    run: runNiftySdFibBuyAboveStBacktest,
   },
 };

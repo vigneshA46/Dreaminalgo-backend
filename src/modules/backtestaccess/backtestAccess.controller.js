@@ -6,6 +6,7 @@ import { validateHullOptions } from "../backtest/hullMa.service.js";
 import { validateEmaOptions } from "../backtest/emaRetest.service.js";
 import { validateEmaStOptions } from "../backtest/emaSupertrend.service.js";
 import { validateEmaStRejectionOptions } from "../backtest/emaSupertrendRejection.service.js";
+import { validateSdFibOptions } from "../backtest/sdFibBuyAbove.service.js";
 import { validateCumOptions } from "../backtest/pivotCumulative.service.js";
 import { validateSt1mOptions } from "../backtest/supertrendEma1min.service.js";
 import { startJob, getJob, cancelJob, stashResult, getSaveSource, getJobCharts } from "../backtest/backtestJobs.js";
@@ -103,6 +104,7 @@ const running = new Set();
 // strategies where a user may pick a date range (everything else: one day), capped to protect the platform's Dhan quota
 // strategies a user may run over a date range (as a background job), with their option checks
 const RANGE_VALIDATORS = {
+  nifty_sd_fib_buy_above_st: validateSdFibOptions,
   pivot_option_buying_cum: validateCumOptions,
   nifty_hourly_range_touch_custom: validateCustomOptions,
   nifty_hull_ma_option_buying: validateHullOptions,

@@ -64,6 +64,7 @@ export async function runDays(input, SimClass, label, hooks = {}) {
   for (let d = input.fromDate; d <= input.toDate; d = addDays(d, 1)) if (!isWeekend(d)) totalDays += 1;
   let doneDays = 0;
   let cancelled = false;
+  let dailyAll = null;
 
   for (let day = input.fromDate; day <= input.toDate; day = addDays(day, 1)) {
     if (isWeekend(day)) continue;
@@ -80,6 +81,7 @@ export async function runDays(input, SimClass, label, hooks = {}) {
     let prev;
     let index = null;
     let history = null;
+    let daily = null;
     try {
       const calls0 = dh.calls;
       today = await dh.day(day, 1);
@@ -113,6 +115,11 @@ export async function runDays(input, SimClass, label, hooks = {}) {
           if (Object.keys(bars).length) history.unshift({ date: d, bars });
         }
       }
+      // strategies that size their levels from the last year of NIFTY daily closes (completed days before this one)
+      if (SimClass.needsDaily) {
+        if (!dailyAll) dailyAll = await dh.indexDaily(addDays(input.fromDate, -640), input.toDate);
+        daily = dailyAll.filter((r) => r.date < day).slice(-(SimClass.dailyCloses || 361));
+      }
       if (dh.calls > calls0) log.info(`data ready (${dh.calls - calls0} API calls)`, day);
     } catch (e) {
       // token / subscription problems -> nothing else will work, stop the whole run
@@ -129,7 +136,7 @@ export async function runDays(input, SimClass, label, hooks = {}) {
 
     let sim;
     try {
-      sim = new SimClass(day, today, prev, index, { history, options: input.options });
+      sim = new SimClass(day, today, prev, index, { history, daily, options: input.options });
       const err = sim.run();
       if (err) {
         days.push({ ...rec, status: "skipped", message: err });

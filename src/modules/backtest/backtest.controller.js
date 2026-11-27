@@ -10,6 +10,7 @@ import * as emaSupertrendService from "./emaSupertrend.service.js";
 import * as emaRejectionService from "./emaSupertrendRejection.service.js";
 import * as supertrendEma1minService from "./supertrendEma1min.service.js";
 import * as pivotCumService from "./pivotCumulative.service.js";
+import * as sdFibService from "./sdFibBuyAbove.service.js";
 import { startJob, getJob, cancelJob, getJobCharts } from "./backtestJobs.js";
 
 // same input checks, status codes and error shape for every backtest endpoint
@@ -85,10 +86,14 @@ export const niftyEmaSupertrendRejection = runBacktest(emaRejectionService.runNi
 // POST /api/backtest/nifty_supertrend_ema_buying_1min   options: { timeframe, dayTarget, daySl }
 export const niftySupertrendEmaBuying1min = runBacktest(supertrendEma1minService.runNiftySupertrendEmaBuying1minBacktest);
 
+// POST /api/backtest/nifty_sd_fib_buy_above_st   (no options)
+export const niftySdFibBuyAboveSt = runBacktest(sdFibService.runNiftySdFibBuyAboveStBacktest);
+
 // ---------- background date-range runs (custom hourly strategy) ----------
 
 // strategies that can run a date range as a background job: runner + option check (400 before any job starts)
 const RANGE_JOBS = {
+  nifty_sd_fib_buy_above_st: { run: sdFibService.runNiftySdFibBuyAboveStBacktest, validate: sdFibService.validateSdFibOptions },
   pivot_option_buying_cum: { run: pivotCumService.runPivotOptionBuyingCumRangeBacktest, validate: pivotCumService.validateCumOptions },
   nifty_hourly_range_touch_custom: { run: hourlyRangeService.runNiftyHourlyRangeTouchCustomBacktest, validate: hourlyRangeService.validateCustomOptions },
   nifty_hull_ma_option_buying: { run: hullMaService.runNiftyHullMaOptionBuyingBacktest, validate: hullMaService.validateHullOptions },
@@ -135,6 +140,9 @@ export const startSupertrendEma1minJob = startRangeJob("nifty_supertrend_ema_buy
 
 // POST /api/backtest/pivot_option_buying_cum/start
 export const startPivotCumJob = startRangeJob("pivot_option_buying_cum");
+
+// POST /api/backtest/nifty_sd_fib_buy_above_st/start
+export const startSdFibJob = startRangeJob("nifty_sd_fib_buy_above_st");
 
 // GET /api/backtest/jobs/:id
 export const getBacktestJob = (req, res) => {

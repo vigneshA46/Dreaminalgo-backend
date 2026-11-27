@@ -55,6 +55,7 @@ const MAX_STRIKE_CANDIDATES = 6;
 
 const ROLLING_URL = "https://api.dhan.co/v2/charts/rollingoption";
 const INTRADAY_URL = "https://api.dhan.co/v2/charts/intraday";
+const HISTORICAL_URL = "https://api.dhan.co/v2/charts/historical";
 const NIFTY_ID = 13;
 const OFFSETS = Array.from({ length: 21 }, (_, i) => i - 10);
 const CALL_GAP_MS = 220;          // Dhan data API ~5 req/s
@@ -162,7 +163,7 @@ class DhanData {
 
   // rolling option API answers { data: {...} }, the intraday API answers the arrays directly
   async post(body, url = ROLLING_URL) {
-    const api = url === ROLLING_URL ? "rollingoption" : "intraday";
+    const api = url === ROLLING_URL ? "rollingoption" : url === HISTORICAL_URL ? "historical" : "intraday";
     for (let attempt = 0; attempt < 6; attempt++) {
       await throttle();
       this.calls += 1;
@@ -235,6 +236,31 @@ class DhanData {
         out[t.hhmm] = [Number(r.open[i]), Number(r.high[i]), Number(r.low[i]), Number(r.close[i])];
       }
     });
+    this.mem.set(key, out);
+    return out;
+  }
+
+  /**
+   * NIFTY index DAILY closes between two dates: [{ date, close }] oldest first (asked in chunks of a year; the
+   * end date may or may not be included by Dhan, callers filter by date). Held for the whole request.
+   */
+  async indexDaily(fromDate, toDate) {
+    const key = `daily_${fromDate}_${toDate}`;
+    if (this.mem.has(key)) return this.mem.get(key);
+    const byDate = new Map();
+    for (let from = fromDate; from < toDate; ) {
+      const to = addDays(from, 365) < toDate ? addDays(from, 365) : addDays(toDate, 1);
+      const r = await this.post(
+        { securityId: String(NIFTY_ID), exchangeSegment: "IDX_I", instrument: "INDEX", expiryCode: 0, oi: false, fromDate: from, toDate: to },
+        HISTORICAL_URL
+      );
+      (r.timestamp || []).forEach((ts, i) => {
+        const close = Number(r.close?.[i]);
+        if (Number.isFinite(close) && close > 0) byDate.set(istParts(ts).date, close);
+      });
+      from = to;
+    }
+    const out = [...byDate.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([date, close]) => ({ date, close }));
     this.mem.set(key, out);
     return out;
   }
