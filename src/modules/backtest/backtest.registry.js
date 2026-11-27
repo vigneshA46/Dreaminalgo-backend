@@ -4,7 +4,7 @@
  * title / description seed the backtest_strategies table; admins can edit them there.
  */
 
-import { runPivotOptionBuyingCumBacktest } from "./backtest.service.js";
+import { runPivotOptionBuyingCumRangeBacktest } from "./pivotCumulative.service.js";
 import { runNiftyOptionPivotBufferBacktest } from "./pivotBuffer.service.js";
 import { runNiftyOptionPivotFixedTargetBacktest } from "./pivotFixedTarget.service.js";
 import { runNiftyOptionLevelBreakoutBacktest } from "./levelBreakout.service.js";
@@ -25,8 +25,8 @@ export const BACKTEST_STRATEGIES = {
     title: "pivot_cumulative_option_buying",
     description:
       "NIFTY CE + PE option buying on previous-day pivot levels (P, R1–R3, S1–S3). Cumulative ₹3,250 side target, " +
-      "lots 2 → 15 (+1 lot on every 2nd SL in a row), strike change outside 170–280, −₹13,000 day stop.",
-    run: runPivotOptionBuyingCumBacktest,
+      "lots 2 → 15 (+1 lot on every 2nd SL in a row), strike change outside 170–280. Inputs: date range, candle timeframe (1 / 3 / 5 / 15 min) and day MTM target / SL, each on or off (default SL −₹13,000).",
+    run: runPivotOptionBuyingCumRangeBacktest,
   },
   nifty_option_pivot_buffer: {
     title: "nifty_option_pivot_buffer",

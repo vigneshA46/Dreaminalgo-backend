@@ -9,6 +9,7 @@ import * as emaRetestService from "./emaRetest.service.js";
 import * as emaSupertrendService from "./emaSupertrend.service.js";
 import * as emaRejectionService from "./emaSupertrendRejection.service.js";
 import * as supertrendEma1minService from "./supertrendEma1min.service.js";
+import * as pivotCumService from "./pivotCumulative.service.js";
 import { startJob, getJob, cancelJob, getJobCharts } from "./backtestJobs.js";
 
 // same input checks, status codes and error shape for every backtest endpoint
@@ -45,7 +46,8 @@ const runBacktest = (runner) => async (req, res) => {
 };
 
 // POST /api/backtest/pivot_option_buying_cum
-export const pivotOptionBuyingCum = runBacktest(backtestService.runPivotOptionBuyingCumBacktest);
+// body adds: options { timeframe, dayTarget, daySl }
+export const pivotOptionBuyingCum = runBacktest(pivotCumService.runPivotOptionBuyingCumRangeBacktest);
 
 // POST /api/backtest/nifty_option_pivot_buffer
 export const niftyOptionPivotBuffer = runBacktest(pivotBufferService.runNiftyOptionPivotBufferBacktest);
@@ -87,6 +89,7 @@ export const niftySupertrendEmaBuying1min = runBacktest(supertrendEma1minService
 
 // strategies that can run a date range as a background job: runner + option check (400 before any job starts)
 const RANGE_JOBS = {
+  pivot_option_buying_cum: { run: pivotCumService.runPivotOptionBuyingCumRangeBacktest, validate: pivotCumService.validateCumOptions },
   nifty_hourly_range_touch_custom: { run: hourlyRangeService.runNiftyHourlyRangeTouchCustomBacktest, validate: hourlyRangeService.validateCustomOptions },
   nifty_hull_ma_option_buying: { run: hullMaService.runNiftyHullMaOptionBuyingBacktest, validate: hullMaService.validateHullOptions },
   nifty_ema_crossover_retest_option_buying: { run: emaRetestService.runNiftyEmaCrossoverRetestBacktest, validate: emaRetestService.validateEmaOptions },
@@ -129,6 +132,9 @@ export const startEmaRejectionJob = startRangeJob("nifty_ema_supertrend_rejectio
 
 // POST /api/backtest/nifty_supertrend_ema_buying_1min/start
 export const startSupertrendEma1minJob = startRangeJob("nifty_supertrend_ema_buying_1min");
+
+// POST /api/backtest/pivot_option_buying_cum/start
+export const startPivotCumJob = startRangeJob("pivot_option_buying_cum");
 
 // GET /api/backtest/jobs/:id
 export const getBacktestJob = (req, res) => {

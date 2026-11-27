@@ -29,6 +29,7 @@ function legReport(leg) {
     trades: 0,
     targets: 0,
     stopLosses: 0,
+    ...(leg.maxLot !== undefined ? { maxLot: leg.maxLot } : {}),
   };
 }
 

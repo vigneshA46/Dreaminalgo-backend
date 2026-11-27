@@ -368,6 +368,9 @@ class DaySim {
     this.trades = [];
     this.events = [];
     this.now = null;
+    // day MTM limits (realised + running, both sides): null = off. The cumulative strategy lets the user change them
+    this.dayMaxLoss = MAX_LOSS;
+    this.dayTarget = null;
   }
 
   // ---------- leg state (mirrors live init_leg) ----------
@@ -627,9 +630,14 @@ class DaySim {
 
   checkMtm() {
     const total = this.realizedTotal() + DaySim.runningPnl(this.legs.CE) + DaySim.runningPnl(this.legs.PE);
-    if (total <= MAX_LOSS + 1e-6 && !this.dayClosed) {
+    if (this.dayClosed) return;
+    // the injected tick levels are rounded to 4 decimals: allow Rs 0.1 so a tick sitting on the limit counts as hitting it
+    if (this.dayMaxLoss !== null && total <= this.dayMaxLoss + 0.1) {
       this.log("MTM", `MTM LIMIT HIT (${total.toFixed(0)})`);
-      this.squareOffAll("MTM -13000");
+      this.squareOffAll(`MTM ${this.dayMaxLoss}`);
+    } else if (this.dayTarget !== null && total >= this.dayTarget - 0.1) {
+      this.log("MTM", `MTM TARGET HIT (${total.toFixed(0)})`);
+      this.squareOffAll(`MTM +${this.dayTarget}`);
     }
   }
 
@@ -709,8 +717,9 @@ class DaySim {
       const remaining = leg.targetPoints * LOTSIZE - leg.pnl;
       lv.push(leg.entryPrice + remaining / (LOTSIZE * leg.lot));
       const other = this.legs[leg.name === "CE" ? "PE" : "CE"];
-      const room = MAX_LOSS - this.realizedTotal() - DaySim.runningPnl(other);
-      lv.push(leg.entryPrice + room / (LOTSIZE * leg.lot));
+      const rest = this.realizedTotal() + DaySim.runningPnl(other);
+      if (this.dayMaxLoss !== null) lv.push(leg.entryPrice + (this.dayMaxLoss - rest) / (LOTSIZE * leg.lot));
+      if (this.dayTarget !== null) lv.push(leg.entryPrice + (this.dayTarget - rest) / (LOTSIZE * leg.lot));
     } else {
       if (leg.armedPivot) lv.push(leg.armedPivot[1] + TICK_ENTRY_POINTS);
       lv.push(ROLL_UPPER + TICK_EPS);
@@ -794,7 +803,7 @@ function legReport(leg) {
   };
 }
 
-function buildSummary(days) {
+export function buildSummary(days) {
   const ok = days.filter((d) => d.status === "ok");
   if (!ok.length) return { summary: null, analysis: ["No traded days in this range."] };
 
@@ -872,8 +881,10 @@ function buildSummary(days) {
       `the lot ladder (+1 lot on every ${SL_PER_LOT_STEP}nd SL in a row, up to ${MAX_LOT}) is what turns the fewer target hits into profit.`);
   }
   if (mtmDays.length) {
-    analysis.push(`The −₹13,000 MTM stop fired on ${mtmDays.length} day(s), ${inr(mtmDays.reduce((s, d) => s + d.dayPnl, 0))} in total — ` +
-      `days where the lot ladder ran up without a target hit.`);
+    const lossStops = mtmDays.filter((d) => d.dayPnl < 0);
+    const profitStops = mtmDays.filter((d) => d.dayPnl >= 0);
+    const part = (list, what) => (list.length ? `${list.length} day(s) by the day MTM ${what} (${inr(list.reduce((s, d) => s + d.dayPnl, 0))})` : null);
+    analysis.push(`The day MTM limit ended ${[part(lossStops, "SL"), part(profitStops, "target")].filter(Boolean).join(" and ")}.`);
   }
   if (maxLot >= 8) analysis.push(`Lots climbed to ${maxLot} at least once — watch margin and slippage at that size.`);
   if (expiryDays.length) analysis.push(`Expiry days: ${expiryDays.length} day(s), net ${inr(summary.expiryDaysPnl)}.`);
